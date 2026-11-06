@@ -1,0 +1,16 @@
+HanX
+
+
+이 프로젝트는 한글과컴퓨터, Microsoft, The Document Foundation 또는 rHWP의 제품이 아니며 이들로부터 제휴나 승인을 받았다고 주장하지 않습니다.
+
+독립 작성 소스의 배포 라이선스는 LICENSE의 MIT 조건입니다. 제품 이름이나 제3자의 상표, 공개 명세 문서, 시스템 프레임워크와 다른 회사의 자산에 대한 권리를 부여하지 않습니다.
+
+호환성 참고 자료
+- Hancom HWP 5.0, HWPML, OWPML 공개 명세: https://www2.hancom.com/support/downloadCenter/hwpOwpml
+- Microsoft Open XML 및 Open Specifications: https://learn.microsoft.com/en-us/office/open-xml/
+- LibreOffice 라이선스 조사: https://www.libreoffice.org/licenses/
+- rHWP 구현 및 법적 설명 조사: https://github.com/edwardkim/rhwp/wiki/Legal-FAQ
+
+LibreOffice와 rHWP는 비교 조사 대상입니다. 이들의 코드를 직접 포함하거나 라이브러리로 연결했다는 고지가 아닙니다. 실제 빌드에는 Apple 및 시스템 프레임워크를 사용합니다.
+
+배포물에 Microsoft Office 또는 한컴오피스 실행 파일, 전환 셰이더, 이미지, 전용 폰트, 템플릿과 원시 UI 분석 데이터를 포함하지 않습니다. 사용자 문서는 배포물에 포함하지 않습니다. 글꼴은 macOS에 설치된 글꼴을 사용하고 없는 글꼴은 대체할 수 있습니다.

@@ -1,0 +1,24 @@
+name: iPad build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode
+        run: xcodebuild -version
+      - name: Build for iPad Simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project HanXPad.xcodeproj -scheme HanXPad -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || true
+          grep -E "error:" build.log | sort -u | head -300 || true
+          tail -5 build.log
+          grep -q "BUILD SUCCEEDED" build.log
