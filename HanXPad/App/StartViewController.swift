@@ -214,7 +214,9 @@ final class HanXMarkView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func draw(_ rect: CGRect) {
-        let k = bounds.width / 1024
+        // Square mark at the leading edge, whatever width the stack gives the view.
+        let side = min(bounds.width, bounds.height)
+        let k = side / 1024
         func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * k, y: (1024 - y) * k) }
         func polygon(_ pts: [(CGFloat, CGFloat)], _ color: UIColor) {
             let path = UIBezierPath()
@@ -225,10 +227,10 @@ final class HanXMarkView: UIView {
             path.fill()
         }
         func rgb(_ v: UInt32) -> UIColor { UIColor(red: CGFloat(v >> 16 & 255) / 255, green: CGFloat(v >> 8 & 255) / 255, blue: CGFloat(v & 255) / 255, alpha: 1) }
-        let base = UIBezierPath(roundedRect: bounds.insetBy(dx: 96 * k, dy: 96 * k), cornerRadius: 184 * k)
+        let base = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: side, height: side).insetBy(dx: 96 * k, dy: 96 * k), cornerRadius: 184 * k)
         if let g = UIGraphicsGetCurrentContext(), let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [rgb(0x2F6B9A).cgColor, rgb(0x234D76).cgColor] as CFArray, locations: [0, 1]) {
             g.saveGState(); base.addClip()
-            g.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: bounds.height), options: [])
+            g.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: side), options: [])
             g.restoreGState()
         }
         polygon([(256, 224), (256, 800), (288, 832), (640, 832), (768, 704), (768, 224), (736, 192), (288, 192)], .white)
