@@ -20,6 +20,10 @@ xcodebuild -project HanXPad.xcodeproj -scheme HanXPad -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
+### 자동 검증 (CI)
+
+`.github/workflows/build.yml`이 GitHub의 macOS 러너에서 iPad 시뮬레이터용으로 빌드한 뒤, 디버그 빌드 전용 실행 옵션 `-HanXDemo document|spreadsheet|presentation|pdf`로 네 편집기를 예제 문서로 열어 크래시 여부와 화면을 확인합니다. 열린 문서는 지원하는 모든 형식으로 내보낸 다음 다시 읽어 봅니다(HWPX·HWP·DOCX·XLSX·PPTX·PDF 등).
+
 ## 기능 (macOS 앱 대응)
 
 | macOS | iPad |
