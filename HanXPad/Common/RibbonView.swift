@@ -144,7 +144,7 @@ final class RibbonView: UIView {
         switch item.kind {
         case .button, .toggle:
             let b = RibbonButton(title: item.title, symbol: item.symbol)
-            b.addAction(UIAction { [weak self] _ in self?.onCommand?(item.id, item.title, 0) }, for: .primaryActionTriggered)
+            b.addAction(UIAction { [weak self] _ in self?.onCommand?(item.id, item.title, 0) }, for: .touchUpInside)
             return b
         case .menu(let options):
             let p = RibbonPopup(width: nil)
@@ -331,7 +331,7 @@ final class RibbonTabBar: UIView {
         buttons = titles.enumerated().map { i, t in
             let b = TabButton(title: t)
             b.isSelected = i == selected
-            b.addAction(UIAction { [weak self] _ in self?.onSelect?(i) }, for: .primaryActionTriggered)
+            b.addAction(UIAction { [weak self] _ in self?.onSelect?(i) }, for: .touchUpInside)
             stack.addArrangedSubview(b)
             return b
         }

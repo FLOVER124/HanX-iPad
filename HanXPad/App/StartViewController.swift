@@ -272,7 +272,7 @@ final class SidebarRow: UIControl {
         accessibilityLabel = title
         accessibilityTraits = selected ? [.button, .selected] : .button
         isAccessibilityElement = true
-        addAction(UIAction { [weak self] _ in self?.action() }, for: .primaryActionTriggered)
+        addAction(UIAction { [weak self] _ in self?.action() }, for: .touchUpInside)
         addInteraction(UIPointerInteraction(delegate: nil))
         updateLook()
     }
@@ -324,7 +324,7 @@ final class TemplateTile: UIControl {
         isAccessibilityElement = true
         accessibilityLabel = title
         accessibilityTraits = .button
-        addAction(UIAction { [weak self] _ in self?.action() }, for: .primaryActionTriggered)
+        addAction(UIAction { [weak self] _ in self?.action() }, for: .touchUpInside)
         addInteraction(UIPointerInteraction(delegate: nil))
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -372,7 +372,7 @@ final class OpenFileBox: UIControl {
         isAccessibilityElement = true
         accessibilityLabel = "파일 열기"
         accessibilityTraits = .button
-        addAction(UIAction { [weak self] _ in self?.action() }, for: .primaryActionTriggered)
+        addAction(UIAction { [weak self] _ in self?.action() }, for: .touchUpInside)
         addInteraction(UIPointerInteraction(delegate: nil))
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -435,7 +435,7 @@ final class RecentRow: UIControl {
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
         accessibilityLabel = url.lastPathComponent
-        addAction(UIAction { [weak self] _ in self?.openAction() }, for: .primaryActionTriggered)
+        addAction(UIAction { [weak self] _ in self?.openAction() }, for: .touchUpInside)
         addInteraction(UIPointerInteraction(delegate: nil))
     }
     required init?(coder: NSCoder) { fatalError() }
