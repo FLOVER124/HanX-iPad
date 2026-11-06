@@ -32,7 +32,7 @@ jobs:
           xcrun simctl install "$UDID" dd/Build/Products/Debug-iphonesimulator/HanX.app
           xcrun simctl ui "$UDID" appearance light || true
           status=0
-          for kind in document spreadsheet presentation pdf; do
+          for kind in start document spreadsheet presentation pdf; do
             xcrun simctl launch "$UDID" com.hanword.editor.ipad -HanXDemo $kind
             sleep 14
             if ! xcrun simctl spawn "$UDID" launchctl list | grep -q com.hanword.editor.ipad; then

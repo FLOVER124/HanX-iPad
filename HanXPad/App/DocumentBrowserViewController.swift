@@ -18,12 +18,14 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController, UIDo
         shouldShowFileExtensions = true
         localizedCreateDocumentActionTitle = "새로 만들기"
         view.tintColor = HanXTheme.accent
-        let about = UIBarButtonItem(image: UIImage(systemName: "info.circle"), menu: UIMenu(children: [
-            UIAction(title: "글꼴 추가…", image: UIImage(systemName: "textformat")) { [weak self] _ in self?.importFonts() },
-            UIAction(title: "HanX 정보", image: UIImage(systemName: "info.circle")) { [weak self] _ in self?.showAbout() },
-        ]))
-        additionalTrailingNavigationBarButtonItems = [about]
+        let close = UIBarButtonItem(title: "닫기", image: UIImage(systemName: "xmark"), primaryAction: UIAction { [weak self] _ in
+            self?.dismiss(animated: true)
+        })
+        additionalLeadingNavigationBarButtonItems = [close]
     }
+
+    /// Set by the start screen: the browser closes and the start screen opens the file.
+    var onOpen: ((URL) -> Void)?
 
     // MARK: Creating
 
@@ -70,32 +72,9 @@ final class DocumentBrowserViewController: UIDocumentBrowserViewController, UIDo
     }
 
     func openDocument(at url: URL) {
-        EditorFactory.open(url, from: self)
+        if let onOpen { onOpen(url) } else { EditorFactory.open(url, from: self) }
     }
 
-    // MARK: Fonts and about
-
-    private var fontPickerDelegate: FontImportDelegate?
-
-    private func importFonts() {
-        let types = ["ttf", "otf", "ttc"].compactMap { UTType(filenameExtension: $0) }
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
-        picker.allowsMultipleSelection = true
-        let delegate = FontImportDelegate { [weak self] urls in
-            let added = FontResolver.shared.importFonts(urls)
-            self?.presentMessage(added.isEmpty ? "글꼴을 추가하지 못했습니다" : "글꼴을 추가했습니다",
-                                 added.isEmpty ? "TrueType 또는 OpenType 글꼴 파일을 선택하세요." : added.joined(separator: ", "))
-        }
-        fontPickerDelegate = delegate
-        picker.delegate = delegate
-        present(picker, animated: true)
-    }
-
-    private func showAbout() {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        presentMessage("HanX for iPad \(version)",
-                       "HWP·HWPX·DOCX 문서, XLSX 도표, PPTX 프레젠테이션과 PDF를 편집합니다.\n\(LegalNotices.independence). 한글과컴퓨터, Microsoft와 제휴 관계가 없습니다.")
-    }
 }
 
 final class FontImportDelegate: NSObject, UIDocumentPickerDelegate {

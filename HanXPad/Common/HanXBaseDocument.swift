@@ -51,6 +51,29 @@ class HanXBaseDocument: UIDocument {
 
     func recordLoadError(_ error: Error) { loadError = error }
 
+    // Files from other providers stay reachable while the document is open.
+    private var accessingScope = false
+
+    override func open(completionHandler: ((Bool) -> Void)? = nil) {
+        accessingScope = fileURL.startAccessingSecurityScopedResource()
+        super.open { [weak self] ok in
+            guard let self else { completionHandler?(ok); return }
+            if ok { RecentDocuments.add(self.fileURL) } else { self.stopAccessingScope() }
+            completionHandler?(ok)
+        }
+    }
+
+    override func close(completionHandler: ((Bool) -> Void)? = nil) {
+        super.close { [weak self] ok in
+            self?.stopAccessingScope()
+            completionHandler?(ok)
+        }
+    }
+
+    private func stopAccessingScope() {
+        if accessingScope { fileURL.stopAccessingSecurityScopedResource(); accessingScope = false }
+    }
+
     /// Discards unsaved edits so closing does not write them.
     func discardChanges() {
         undoManager?.removeAllActions()

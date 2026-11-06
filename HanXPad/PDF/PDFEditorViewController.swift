@@ -7,14 +7,14 @@ import PencilKit
 /// images / shapes, OCR, 문서로 편집) and 펜 (Apple Pencil markup baked into
 /// the page). A page sidebar rotates, duplicates, inserts, deletes and
 /// reorders pages.
-final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDelegate, UICollectionViewDataSource, UICollectionViewDelegate,
+final class PDFEditorViewController: HanXEditorViewController, UIGestureRecognizerDelegate, UIScrollViewDelegate, UICollectionViewDataSource, UICollectionViewDelegate,
                                      UICollectionViewDragDelegate, UICollectionViewDropDelegate, UITextViewDelegate {
-    enum Mode: Int { case read, edit, pen }
+    enum Mode: Int { case read, ink, edit }
 
     let doc: PDFFileDocument
-    private var mode: Mode = .edit
+    private var mode: Mode = .read
     private var pageIndex = 0
-    private let modes = UISegmentedControl(items: ["읽기", "개체 편집", "펜"])
+    private let modes = UISegmentedControl(items: ["읽기", "필기", "개체 편집"])
     private let sidebar: UICollectionView
     private let reader = PDFView()
     private let scroll = UIScrollView()
@@ -23,8 +23,13 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
     private let findBar = UIView()
     private let findField = UITextField()
     private let findCount = UILabel()
-    private var inkCanvas: PKCanvasView?
-    private var toolPicker: PKToolPicker?
+    private let ink = PDFInkController()
+    private var inkActive = false
+    private var sidebarWidth: NSLayoutConstraint!
+    private var sidebarVisible = false
+    private var sidebarItem: UIBarButtonItem!
+    private let footer = UIStackView()
+    private var hideTimer: Timer?
     private var inlineEditor: UITextView?
     private var editingObject: PDFPageObject?
     private var matches: [(page: Int, rect: CGRect)] = []
@@ -49,9 +54,14 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
     deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
 
     override func extraBarItems() -> [UIBarButtonItem] {
-        modes.selectedSegmentIndex = Mode.edit.rawValue
-        modes.addAction(UIAction { [weak self] _ in self?.setMode(Mode(rawValue: self?.modes.selectedSegmentIndex ?? 1) ?? .edit) }, for: .valueChanged)
-        return [UIBarButtonItem(customView: modes)]
+        modes.selectedSegmentIndex = Mode.read.rawValue
+        modes.addAction(UIAction { [weak self] _ in self?.setMode(Mode(rawValue: self?.modes.selectedSegmentIndex ?? 0) ?? .read) }, for: .valueChanged)
+        sidebarItem = UIBarButtonItem(title: "페이지 패널", image: UIImage(systemName: "sidebar.left"), primaryAction: UIAction { [weak self] _ in
+            guard let self else { return }
+            self.setSidebar(!self.sidebarVisible, animated: true)
+            self.scheduleHide()
+        })
+        return [UIBarButtonItem(customView: modes), sidebarItem]
     }
 
     override func viewDidLoad() {
@@ -94,7 +104,7 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
         next.setImage(UIImage(systemName: "chevron.right"), for: .normal)
         prev.addAction(UIAction { [weak self] _ in self?.go(to: (self?.pageIndex ?? 0) - 1) }, for: .primaryActionTriggered)
         next.addAction(UIAction { [weak self] _ in self?.go(to: (self?.pageIndex ?? 0) + 1) }, for: .primaryActionTriggered)
-        let footer = UIStackView(arrangedSubviews: [UIView(), prev, status, next, UIView()])
+        for v in [UIView(), prev, status, next, UIView()] { footer.addArrangedSubview(v) }
         footer.spacing = 12
         footer.backgroundColor = HanXTheme.toolbar
         footer.isLayoutMarginsRelativeArrangement = true
@@ -121,10 +131,19 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
             row.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             row.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             row.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            sidebar.widthAnchor.constraint(equalToConstant: 140),
             footer.heightAnchor.constraint(equalToConstant: 40),
         ])
+        sidebarWidth = sidebar.widthAnchor.constraint(equalToConstant: 0)
+        sidebarWidth.isActive = true
+        sidebar.isHidden = true
         findBar.isHidden = true
+
+        // 읽기: tap the page to show the bars; they hide again after 3 seconds.
+        let tap = UITapGestureRecognizer(target: self, action: #selector(readerTapped(_:)))
+        tap.delegate = self
+        tap.cancelsTouchesInView = false
+        reader.addGestureRecognizer(tap)
+        ink.onChange = { [weak self] in self?.updateChrome() }
 
         observer = NotificationCenter.default.addObserver(forName: .pdfDocumentChanged, object: doc, queue: .main) { [weak self] _ in self?.documentChanged() }
     }
@@ -132,7 +151,7 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
     override func didFinishPresenting() {
         super.didFinishPresenting()
         if doc.isLocked { askPassword() } else { documentChanged() }
-        setMode(.edit)
+        setMode(.read)
     }
 
     private func askPassword() {
@@ -279,22 +298,56 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
 
     private func setMode(_ m: Mode) {
         commitTextEdit()
-        if mode == .pen && m != .pen { finishInk() }
-        if mode == .read, m != .read, let current = reader.currentPage, reader.document === doc.pdf, let i = doc.pdf?.index(for: current) {
+        if inkActive { finishInk() }
+        if mode != .edit, m == .edit, let current = reader.currentPage, reader.document === doc.pdf, let i = doc.pdf?.index(for: current) {
             pageIndex = i
         }
         mode = m
         modes.selectedSegmentIndex = m.rawValue
-        reader.isHidden = m != .read
-        scroll.isHidden = m == .read
-        if m == .read {
+        reader.isHidden = m == .edit
+        scroll.isHidden = m != .edit
+        footer.isHidden = m != .edit
+        if m == .edit {
+            findBar.isHidden = true
+            showPage()
+        } else {
             if reader.document !== doc.pdf { reader.document = doc.pdf }
             if let page = doc.pdf?.page(at: pageIndex) { reader.go(to: page) }
-        } else {
-            showPage()
         }
-        if m == .pen { beginInk() }
+        if m == .ink { beginInk() }
+        // Panels: open while editing objects, folded for reading and writing.
+        setSidebar(m == .edit, animated: false)
+        setRibbonVisible(m == .edit, fullScreen: m == .read)
+        hideTimer?.invalidate()
+        if m == .read { setBarsHidden(false, animated: false); scheduleHide() } else { setBarsHidden(false, animated: true) }
         ribbon?.refresh()
+    }
+
+    private func setSidebar(_ visible: Bool, animated: Bool) {
+        sidebarVisible = visible
+        sidebarItem?.isSelected = visible
+        sidebarWidth.constant = visible ? 140 : 0
+        if visible { sidebar.isHidden = false }
+        UIView.animate(withDuration: animated ? 0.25 : 0, animations: { self.view.layoutIfNeeded() }, completion: { _ in
+            if !self.sidebarVisible { self.sidebar.isHidden = true }
+        })
+    }
+
+    @objc private func readerTapped(_ g: UITapGestureRecognizer) {
+        guard mode == .read else { return }
+        hideTimer?.invalidate()
+        setBarsHidden(!barsHidden, animated: true)
+        if !barsHidden { scheduleHide() }
+    }
+
+    /// In 읽기 the bars fade out 3 seconds after they appear (unless a menu or panel is in use).
+    private func scheduleHide() {
+        hideTimer?.invalidate()
+        guard mode == .read else { return }
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
+            guard let self, self.mode == .read, self.presentedViewController == nil, !self.sidebarVisible, self.findBar.isHidden else { return }
+            self.setBarsHidden(true, animated: true)
+        }
     }
 
     // MARK: Pages
@@ -304,8 +357,12 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
         pageIndex = max(0, min(pageIndex, count - 1))
         if thumbnailRevision != doc.revision { thumbnailCache = [:]; thumbnailRevision = doc.revision }
         sidebar.reloadData()
-        if mode == .read { reader.document = doc.pdf; if let p = doc.pdf?.page(at: pageIndex) { reader.go(to: p) } }
-        showPage(keepSelection: true)
+        if mode != .edit, !inkActive, reader.document !== doc.pdf {
+            let current = reader.currentPage.flatMap { reader.document?.index(for: $0) } ?? pageIndex
+            reader.document = doc.pdf
+            if let p = doc.pdf?.page(at: min(current, max(0, count - 1))) { reader.go(to: p) }
+        }
+        if mode == .edit { showPage(keepSelection: true) }
         updateChrome()
     }
 
@@ -313,10 +370,8 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
         guard let count = doc.pdf?.pageCount, count > 0 else { return }
         let i = max(0, min(count - 1, index))
         commitTextEdit()
-        if mode == .pen { finishInk() }
         pageIndex = i
-        if mode == .read, let page = doc.pdf?.page(at: i) { reader.go(to: page) } else { showPage() }
-        if mode == .pen { beginInk() }
+        if mode != .edit, let page = doc.pdf?.page(at: i) { reader.go(to: page) } else { showPage() }
         sidebar.selectItem(at: IndexPath(item: i, section: 0), animated: true, scrollPosition: .centeredVertically)
     }
 
@@ -519,7 +574,7 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
 
     override func commitPendingEdits() {
         commitTextEdit()
-        if mode == .pen { finishInk(); beginInk() }
+        if inkActive { finishInk(); beginInk() }
     }
 
     // MARK: Geometry popover
@@ -580,7 +635,7 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
     }
 
     override func showFind(_ sender: Any?) {
-        if mode == .read { reader.findInteraction.presentFindNavigator(showingReplace: false); return }
+        if mode != .edit { hideTimer?.invalidate(); setBarsHidden(false, animated: true); reader.findInteraction.presentFindNavigator(showingReplace: false); return }
         let show = findBar.isHidden
         UIView.animate(withDuration: 0.2) { self.findBar.isHidden = !show }
         if show { findField.becomeFirstResponder() } else { matches = []; highlightMatches(); view.endEditing(true) }
@@ -634,39 +689,30 @@ final class PDFEditorViewController: HanXEditorViewController, UIScrollViewDeleg
         }
     }
 
-    // MARK: Pen (PencilKit)
+    // MARK: 필기 (PencilKit)
 
     private func beginInk() {
-        guard inkCanvas == nil else { return }
-        let ink = PKCanvasView(frame: canvas.bounds)
-        ink.backgroundColor = .clear
-        ink.isOpaque = false
-        ink.drawingPolicy = .default
-        ink.isScrollEnabled = false
-        ink.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        canvas.addSubview(ink)
-        inkCanvas = ink
-        let picker = toolPicker ?? PKToolPicker()
-        toolPicker = picker
-        picker.setVisible(true, forFirstResponder: ink)
-        picker.addObserver(ink)
-        ink.becomeFirstResponder()
+        guard !inkActive, let pdf = doc.pdf else { return }
+        inkActive = true
+        ink.begin(on: reader, document: pdf)
+        if let page = pdf.page(at: pageIndex) { reader.go(to: page) }
     }
 
-    /// Bakes the strokes into the page as an image, then clears the overlay.
+    /// Writes the handwriting into the PDF (vector ink annotations) as one undoable step.
     private func finishInk() {
-        guard let ink = inkCanvas else { return }
-        inkCanvas = nil
-        toolPicker?.setVisible(false, forFirstResponder: ink)
-        toolPicker?.removeObserver(ink)
-        let drawing = ink.drawing
-        ink.removeFromSuperview()
-        guard !drawing.strokes.isEmpty else { return }
-        let bounds = drawing.bounds.insetBy(dx: -4, dy: -4).intersection(canvas.bounds)
-        guard bounds.width > 1, bounds.height > 1 else { return }
-        let image = drawing.image(from: bounds, scale: max(3, 3 / max(0.1, canvas.scale)))
-        guard let png = image.pngData() else { return }
-        applyEdit(.addImage(page: pageIndex, rect: canvas.pageRect(bounds), data: png))
+        guard inkActive, let pdf = doc.pdf else { inkActive = false; return }
+        inkActive = false
+        let current = reader.currentPage.flatMap { pdf.index(for: $0) } ?? pageIndex
+        let changed = ink.end(document: pdf)
+        pageIndex = current
+        guard changed, let data = pdf.dataRepresentation() else {
+            // Drop the page overlays (the provider is gone) and show the restored annotations.
+            reader.document = nil
+            reader.document = pdf
+            if let page = pdf.page(at: current) { reader.go(to: page) }
+            return
+        }
+        doc.setData(data, actionName: "필기")
     }
 
     // MARK: Sidebar
@@ -878,4 +924,8 @@ final class OCRResultViewController: UIViewController {
 
 extension CGRect {
     var center: CGPoint { CGPoint(x: midX, y: midY) }
+}
+
+extension PDFEditorViewController {
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 }

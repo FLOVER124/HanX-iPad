@@ -1,8 +1,9 @@
 import UIKit
 
-/// Touch-sized ribbon shared by every editor. Tabs and groups match the macOS
-/// OfficeRibbon item for item (same command ids), laid out for fingers: 44 pt
-/// targets, a horizontally scrolling row, pull-down menus instead of popups.
+/// Ribbon shared by every editor, drawn like the macOS OfficeRibbon: an
+/// underlined tab strip, borderless icon-over-title buttons that highlight on
+/// press, bordered pop-up and value boxes, captioned groups with separators.
+/// Tabs, groups and command ids are the same as on macOS.
 final class RibbonView: UIView {
     struct Item {
         enum Kind { case button, menu([String]), field([String]), toggle }
@@ -20,6 +21,7 @@ final class RibbonView: UIView {
     struct Tab { let title: String; let groups: [Group] }
 
     static let colorMenu = Palette.names + [Palette.custom]
+    static let height: CGFloat = 116
 
     /// (command id, chosen value, index of the chosen option or -1 for typed values)
     var onCommand: ((String, String, Int) -> Void)?
@@ -32,32 +34,33 @@ final class RibbonView: UIView {
     weak var host: UIViewController?
 
     private let tabs: [Tab]
-    private let tabControl: UISegmentedControl
+    private let tabBar = RibbonTabBar()
     private let scroll = UIScrollView()
     private let row = UIStackView()
-    private var controls: [String: UIButton] = [:]
+    private var controls: [String: UIView] = [:]
     private var items: [String: Item] = [:]
+    /// Pop-ups show the option chosen last, as NSPopUpButton does.
+    private var chosen: [String: String] = [:]
     private(set) var selectedTab = 0
 
     init(tabs: [Tab]) {
         self.tabs = tabs
-        tabControl = UISegmentedControl(items: tabs.map(\.title))
         super.init(frame: .zero)
-        backgroundColor = HanXTheme.toolbar
-        tabControl.selectedSegmentIndex = 0
-        tabControl.addAction(UIAction { [weak self] _ in self?.showTab(self?.tabControl.selectedSegmentIndex ?? 0) }, for: .valueChanged)
-        tabControl.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(tabControl)
+        backgroundColor = HanXTheme.paper
+        tabBar.titles = tabs.map(\.title)
+        tabBar.onSelect = { [weak self] i in self?.showTab(i) }
+        tabBar.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(tabBar)
 
         scroll.showsHorizontalScrollIndicator = false
-        scroll.alwaysBounceHorizontal = true
+        scroll.alwaysBounceHorizontal = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
         row.axis = .horizontal
         row.alignment = .top
-        row.spacing = 10
+        row.spacing = 12
         row.isLayoutMarginsRelativeArrangement = true
-        row.layoutMargins = UIEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
+        row.layoutMargins = UIEdgeInsets(top: 3, left: 14, bottom: 6, right: 14)
         row.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(row)
 
@@ -67,14 +70,13 @@ final class RibbonView: UIView {
         addSubview(divider)
 
         NSLayoutConstraint.activate([
-            tabControl.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            tabControl.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 12),
-            tabControl.trailingAnchor.constraint(lessThanOrEqualTo: safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            tabControl.heightAnchor.constraint(equalToConstant: 32),
-            scroll.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 4),
+            tabBar.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            tabBar.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 12),
+            tabBar.trailingAnchor.constraint(lessThanOrEqualTo: safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            tabBar.heightAnchor.constraint(equalToConstant: 31),
+            scroll.topAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: 2),
             scroll.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
-            scroll.heightAnchor.constraint(equalToConstant: 76),
             scroll.bottomAnchor.constraint(equalTo: divider.topAnchor),
             row.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
             row.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
@@ -86,6 +88,7 @@ final class RibbonView: UIView {
             divider.trailingAnchor.constraint(equalTo: trailingAnchor),
             divider.bottomAnchor.constraint(equalTo: bottomAnchor),
             divider.heightAnchor.constraint(equalToConstant: 1),
+            heightAnchor.constraint(equalToConstant: RibbonView.height),
         ])
         showTab(0)
     }
@@ -95,20 +98,21 @@ final class RibbonView: UIView {
     func showTab(_ index: Int) {
         guard tabs.indices.contains(index) else { return }
         selectedTab = index
-        tabControl.selectedSegmentIndex = index
+        tabBar.selected = index
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
         controls = [:]
         for (gi, group) in tabs[index].groups.enumerated() {
             let buttons = UIStackView()
             buttons.axis = .horizontal
-            buttons.spacing = 2
+            buttons.spacing = 4
             buttons.alignment = .center
             for item in group.items {
-                let b = makeControl(item)
+                let control = makeControl(item)
                 items[item.id] = item
-                controls[item.id] = b
-                buttons.addArrangedSubview(b)
+                controls[item.id] = control
+                buttons.addArrangedSubview(control)
             }
+            buttons.heightAnchor.constraint(equalToConstant: 50).isActive = true
             let caption = UILabel()
             caption.text = group.title
             caption.font = .systemFont(ofSize: 10.5)
@@ -116,18 +120,19 @@ final class RibbonView: UIView {
             caption.textAlignment = .center
             let stack = UIStackView(arrangedSubviews: [buttons, caption])
             stack.axis = .vertical
-            stack.spacing = 2
+            stack.spacing = 3
             stack.alignment = .center
             row.addArrangedSubview(stack)
             if gi < tabs[index].groups.count - 1 {
                 let line = UIView()
                 line.backgroundColor = HanXTheme.border
                 line.widthAnchor.constraint(equalToConstant: 1).isActive = true
-                line.heightAnchor.constraint(equalToConstant: 58).isActive = true
+                line.heightAnchor.constraint(equalToConstant: 62).isActive = true
                 row.addArrangedSubview(line)
             }
         }
         row.addArrangedSubview(UIView())
+        scroll.contentOffset = .zero
         refresh()
     }
 
@@ -135,64 +140,37 @@ final class RibbonView: UIView {
         if let i = tabs.firstIndex(where: { $0.title == title }) { showTab(i) }
     }
 
-    private func makeControl(_ item: Item) -> UIButton {
-        var config = UIButton.Configuration.plain()
-        config.baseForegroundColor = HanXTheme.ink
-        config.imagePlacement = .top
-        config.imagePadding = 3
-        config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6)
-        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
-            var a = attrs
-            a.font = UIFont.systemFont(ofSize: 11.5)
-            return a
-        }
-        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
-        let b = UIButton(configuration: config)
-        b.accessibilityLabel = item.title
-        b.accessibilityIdentifier = item.id
-        b.isPointerInteractionEnabled = true
+    private func makeControl(_ item: Item) -> UIView {
         switch item.kind {
         case .button, .toggle:
-            b.configuration?.title = item.title
-            if let symbol = item.symbol { b.configuration?.image = UIImage(systemName: symbol) }
+            let b = RibbonButton(title: item.title, symbol: item.symbol)
             b.addAction(UIAction { [weak self] _ in self?.onCommand?(item.id, item.title, 0) }, for: .primaryActionTriggered)
-            b.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
-            b.widthAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+            return b
         case .menu(let options):
-            b.configuration?.title = item.title
-            b.configuration?.image = UIImage(systemName: item.symbol ?? "chevron.down.square")
-            b.showsMenuAsPrimaryAction = true
-            b.menu = UIMenu(title: item.title, children: options.enumerated().map { i, option in
-                UIAction(title: option) { [weak self] _ in self?.onCommand?(item.id, option, i) }
+            let p = RibbonPopup(width: nil)
+            p.title = chosen[item.id] ?? options.first ?? item.title
+            p.accessibilityLabel = item.title
+            p.menu = UIMenu(title: item.title, children: options.enumerated().map { i, option in
+                UIAction(title: option) { [weak self, weak p] _ in
+                    // Prompts such as "여백 선택…" and "사용자 지정…" do not stick as the shown value.
+                    if !option.hasSuffix("…") { self?.chosen[item.id] = option; p?.title = option }
+                    self?.onCommand?(item.id, option, i)
+                }
             })
-            b.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
+            return p
         case .field(let options):
-            var c = UIButton.Configuration.bordered()
-            c.baseForegroundColor = HanXTheme.ink
-            c.title = options.first ?? item.title
-            c.subtitle = item.title
-            c.titleLineBreakMode = .byTruncatingTail
-            c.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
-            c.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
-                var a = attrs; a.font = UIFont.systemFont(ofSize: 13); return a
-            }
-            c.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
-                var a = attrs; a.font = UIFont.systemFont(ofSize: 9.5); a.foregroundColor = HanXTheme.secondary; return a
-            }
-            b.configuration = c
-            b.showsMenuAsPrimaryAction = true
-            let width: CGFloat = item.id == "font" ? 150 : 74
-            b.widthAnchor.constraint(equalToConstant: width).isActive = true
-            b.heightAnchor.constraint(equalToConstant: 48).isActive = true
-            b.menu = fieldMenu(item, options: options, button: b)
+            let p = RibbonPopup(width: item.id == "font" ? 146 : 64)
+            p.title = options.first ?? ""
+            p.accessibilityLabel = item.title
+            p.menu = fieldMenu(item, options: options, control: p)
+            return p
         }
-        return b
     }
 
-    private func fieldMenu(_ item: Item, options: [String], button: UIButton) -> UIMenu {
-        let typed = UIAction(title: item.id == "font" ? "글꼴 선택…" : "직접 입력…", image: UIImage(systemName: "keyboard")) { [weak self, weak button] _ in
-            guard let self, let button else { return }
-            if self.customField?(item.id, button) == true { return }
+    private func fieldMenu(_ item: Item, options: [String], control: UIView) -> UIMenu {
+        let typed = UIAction(title: item.id == "font" ? "글꼴 선택…" : "직접 입력…", image: UIImage(systemName: "keyboard")) { [weak self, weak control] _ in
+            guard let self, let control else { return }
+            if self.customField?(item.id, control) == true { return }
             let current = self.currentValue?(item.id) ?? ""
             self.host?.promptText(item.title, text: current, keyboard: item.id == "font" ? .default : .decimalPad) { value in
                 guard let value, !value.isEmpty else { return }
@@ -207,20 +185,191 @@ final class RibbonView: UIView {
 
     /// Re-reads toggle states, field values and availability.
     func refresh() {
-        for (id, b) in controls {
+        for (id, control) in controls {
             guard let item = items[id] else { continue }
-            if case .field = item.kind, let value = currentValue?(id) {
-                b.configuration?.title = value.isEmpty ? "—" : value
+            let enabled = isEnabled?(id) ?? true
+            if let b = control as? RibbonButton {
+                if case .toggle = item.kind { b.isOn = isOn?(id) ?? false }
+                b.isEnabled = enabled
+            } else if let p = control as? RibbonPopup {
+                if case .field = item.kind, let value = currentValue?(id) { p.title = value.isEmpty ? "—" : value }
+                p.isEnabled = enabled
             }
-            if case .toggle = item.kind {
-                let on = isOn?(id) ?? false
-                b.configuration?.background.backgroundColor = on ? HanXTheme.selection : .clear
-                b.configuration?.baseForegroundColor = on ? HanXTheme.accent : HanXTheme.ink
-                b.accessibilityTraits = on ? [.button, .selected] : .button
-            }
-            b.isEnabled = isEnabled?(id) ?? true
         }
     }
 
-    func control(_ id: String) -> UIButton? { controls[id] }
+    func control(_ id: String) -> UIView? { controls[id] }
+}
+
+// MARK: - Controls drawn like HWActionButton / HWPopupButton / HWTabControl
+
+/// Borderless icon-over-title button; pressed or "on" shows the selection fill.
+final class RibbonButton: UIControl {
+    let title: String
+    private let image: UIImage?
+    var isOn = false { didSet { if oldValue != isOn { setNeedsDisplay(); accessibilityTraits = isOn ? [.button, .selected] : .button } } }
+    override var isHighlighted: Bool { didSet { setNeedsDisplay() } }
+    override var isEnabled: Bool { didSet { setNeedsDisplay() } }
+    private var hovering = false { didSet { setNeedsDisplay() } }
+
+    init(title: String, symbol: String?) {
+        self.title = title
+        image = symbol.flatMap { UIImage(systemName: $0, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)) }
+        super.init(frame: .zero)
+        backgroundColor = .clear
+        isOpaque = false
+        contentMode = .redraw
+        isAccessibilityElement = true
+        accessibilityLabel = title
+        accessibilityTraits = .button
+        let width = max(44, min(108, (title as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: 11.5)]).width + 16))
+        NSLayoutConstraint.activate([widthAnchor.constraint(equalToConstant: ceil(width)), heightAnchor.constraint(equalToConstant: 48)])
+        addInteraction(UIPointerInteraction(delegate: nil))
+        addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hover(_:))))
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func hover(_ g: UIHoverGestureRecognizer) { hovering = g.state == .began || g.state == .changed }
+
+    override func draw(_ rect: CGRect) {
+        let active = isOn || isHighlighted
+        if active || hovering {
+            let p = UIBezierPath(roundedRect: bounds.insetBy(dx: 1.5, dy: 1.5), cornerRadius: 4)
+            (active ? HanXTheme.selection : HanXTheme.toolbar).setFill()
+            p.fill()
+            if active { HanXTheme.border.setStroke(); p.lineWidth = 1; p.stroke() }
+        }
+        let tint: UIColor = !isEnabled ? HanXTheme.secondary.withAlphaComponent(0.45) : active ? HanXTheme.accent : HanXTheme.ink
+        if let image {
+            let tinted = image.withTintColor(tint, renderingMode: .alwaysOriginal)
+            let s = tinted.size
+            let k = min(1, 20 / max(s.width, s.height))
+            let w = s.width * k, h = s.height * k
+            tinted.draw(in: CGRect(x: bounds.midX - w / 2, y: 6 + (20 - h) / 2, width: w, height: h))
+        }
+        let para = NSMutableParagraphStyle()
+        para.alignment = .center
+        para.lineBreakMode = .byTruncatingTail
+        let font = UIFont.systemFont(ofSize: 11.5, weight: active ? .semibold : .regular)
+        let y: CGFloat = image == nil ? bounds.midY - 8 : bounds.height - 19
+        (title as NSString).draw(in: CGRect(x: 3, y: y, width: bounds.width - 6, height: 16),
+                                 withAttributes: [.font: font, .foregroundColor: tint, .paragraphStyle: para])
+    }
+}
+
+/// Bordered value box with a chevron that opens its menu (pop-up / combo box).
+final class RibbonPopup: UIButton {
+    var title = "" { didSet { if oldValue != title { setNeedsDisplay(); invalidateIntrinsicContentSize(); accessibilityValue = title } } }
+    override var isHighlighted: Bool { didSet { setNeedsDisplay() } }
+    override var isEnabled: Bool { didSet { setNeedsDisplay() } }
+    private let fixedWidth: CGFloat?
+
+    init(width: CGFloat?) {
+        fixedWidth = width
+        super.init(frame: .zero)
+        backgroundColor = .clear
+        contentMode = .redraw
+        showsMenuAsPrimaryAction = true
+        heightAnchor.constraint(equalToConstant: 30).isActive = true
+        if let width { widthAnchor.constraint(equalToConstant: width).isActive = true }
+        else { widthAnchor.constraint(lessThanOrEqualToConstant: 175).isActive = true }
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var intrinsicContentSize: CGSize {
+        let w = (title as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: 12)]).width + 34
+        return CGSize(width: fixedWidth ?? max(64, min(175, ceil(w))), height: 30)
+    }
+
+    override func draw(_ rect: CGRect) {
+        let r = bounds.insetBy(dx: 0.5, dy: 0.5)
+        let p = UIBezierPath(roundedRect: r, cornerRadius: 4)
+        (isEnabled ? (isHighlighted ? HanXTheme.selection : HanXTheme.paper) : HanXTheme.toolbar).setFill()
+        p.fill()
+        HanXTheme.border.setStroke()
+        p.lineWidth = 1
+        p.stroke()
+        let color = isEnabled ? HanXTheme.ink : HanXTheme.secondary
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byTruncatingTail
+        (title as NSString).draw(in: CGRect(x: 9, y: bounds.midY - 8, width: max(1, bounds.width - 29), height: 17),
+                                 withAttributes: [.font: UIFont.systemFont(ofSize: 12), .foregroundColor: color, .paragraphStyle: para])
+        let chevron = UIBezierPath()
+        chevron.move(to: CGPoint(x: bounds.maxX - 17, y: bounds.midY - 2))
+        chevron.addLine(to: CGPoint(x: bounds.maxX - 13, y: bounds.midY + 2))
+        chevron.addLine(to: CGPoint(x: bounds.maxX - 9, y: bounds.midY - 2))
+        chevron.lineWidth = 1.2
+        HanXTheme.secondary.setStroke()
+        chevron.stroke()
+    }
+}
+
+/// Tab strip: plain labels; the selected tab gets the selection fill, accent
+/// semibold text and a 2 pt accent underline.
+final class RibbonTabBar: UIView {
+    var titles: [String] = [] { didSet { rebuild() } }
+    var selected = 0 { didSet { buttons.enumerated().forEach { $0.element.isSelected = $0.offset == selected } } }
+    var onSelect: ((Int) -> Void)?
+    private var buttons: [TabButton] = []
+    private let stack = UIStackView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        stack.axis = .horizontal
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor), stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor), stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func rebuild() {
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        buttons = titles.enumerated().map { i, t in
+            let b = TabButton(title: t)
+            b.isSelected = i == selected
+            b.addAction(UIAction { [weak self] _ in self?.onSelect?(i) }, for: .primaryActionTriggered)
+            stack.addArrangedSubview(b)
+            return b
+        }
+    }
+
+    final class TabButton: UIControl {
+        let title: String
+        override var isSelected: Bool { didSet { setNeedsDisplay(); accessibilityTraits = isSelected ? [.button, .selected] : .button } }
+        override var isHighlighted: Bool { didSet { setNeedsDisplay() } }
+
+        init(title: String) {
+            self.title = title
+            super.init(frame: .zero)
+            backgroundColor = .clear
+            contentMode = .redraw
+            isAccessibilityElement = true
+            accessibilityLabel = title
+            let w = (title as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: 12.5, weight: .semibold)]).width + 28
+            widthAnchor.constraint(equalToConstant: max(64, ceil(w))).isActive = true
+            addInteraction(UIPointerInteraction(delegate: nil))
+        }
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func draw(_ rect: CGRect) {
+            if isSelected || isHighlighted {
+                (isSelected ? HanXTheme.selection : HanXTheme.toolbar).setFill()
+                UIBezierPath(roundedRect: bounds, byRoundingCorners: [.topLeft, .topRight], cornerRadii: CGSize(width: 4, height: 4)).fill()
+            }
+            let color = isSelected ? HanXTheme.accent : HanXTheme.secondary
+            let para = NSMutableParagraphStyle()
+            para.alignment = .center
+            (title as NSString).draw(in: CGRect(x: 4, y: bounds.midY - 8.5, width: bounds.width - 8, height: 18),
+                                     withAttributes: [.font: UIFont.systemFont(ofSize: 12.5, weight: isSelected ? .semibold : .regular),
+                                                      .foregroundColor: color, .paragraphStyle: para])
+            if isSelected {
+                HanXTheme.accent.setFill()
+                UIRectFill(CGRect(x: 8, y: bounds.maxY - 2, width: max(0, bounds.width - 16), height: 2))
+            }
+        }
+    }
 }

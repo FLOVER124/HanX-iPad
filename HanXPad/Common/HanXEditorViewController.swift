@@ -85,10 +85,41 @@ class HanXEditorViewController: UIViewController, UIDocumentPickerDelegate {
             r.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             r.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             r.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            contentView.topAnchor.constraint(equalTo: r.bottomAnchor),
-        ])
+            ])
         ribbon = r
+        contentTop = contentView.topAnchor.constraint(equalTo: r.bottomAnchor)
+        contentTop?.isActive = true
     }
+
+    // MARK: Full-screen reading (PDF 읽기 / 필기)
+
+    private lazy var contentFull = contentView.topAnchor.constraint(equalTo: view.topAnchor)
+    private lazy var contentBelowBar = contentView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+    private(set) var barsHidden = false
+
+    /// Hides the ribbon; with `fullScreen` the content also runs under the
+    /// navigation bar so showing/hiding the bar does not move the page.
+    func setRibbonVisible(_ visible: Bool, fullScreen: Bool = false) {
+        ribbon?.isHidden = !visible
+        contentTop?.isActive = false
+        contentFull.isActive = false
+        contentBelowBar.isActive = false
+        if visible, ribbon != nil { contentTop?.isActive = true }
+        else if fullScreen { contentFull.isActive = true }
+        else { contentBelowBar.isActive = true }
+        view.layoutIfNeeded()
+    }
+
+    func setBarsHidden(_ hidden: Bool, animated: Bool) {
+        guard barsHidden != hidden else { return }
+        barsHidden = hidden
+        navigationController?.setNavigationBarHidden(hidden, animated: animated)
+        UIView.animate(withDuration: animated ? 0.25 : 0) { self.setNeedsStatusBarAppearanceUpdate() }
+    }
+
+    override var prefersStatusBarHidden: Bool { barsHidden }
+    override var preferredStatusBarUpdateAnimation: UIStatusBarAnimation { .fade }
+    override var prefersHomeIndicatorAutoHidden: Bool { barsHidden }
 
     // MARK: Hooks
 

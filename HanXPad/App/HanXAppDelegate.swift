@@ -35,20 +35,20 @@ final class HanXAppDelegate: UIResponder, UIApplicationDelegate {
 
 final class HanXSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
-    private var browser: DocumentBrowserViewController?
+    private var start: StartViewController?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: windowScene)
-        let browser = DocumentBrowserViewController()
-        window.rootViewController = browser
+        let start = StartViewController()
+        window.rootViewController = start
         window.tintColor = HanXTheme.accent
         window.makeKeyAndVisible()
         self.window = window
-        self.browser = browser
+        self.start = start
         if let context = connectionOptions.urlContexts.first { open(context) }
         #if DEBUG
-        DemoDocuments.openIfRequested(from: browser)
+        DemoDocuments.openIfRequested(from: start)
         #endif
     }
 
@@ -56,12 +56,9 @@ final class HanXSceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let context = URLContexts.first { open(context) }
     }
 
+    /// Files opened from the Files app (in place) or shared into HanX.
     private func open(_ context: UIOpenURLContext) {
-        let url = context.url
-        guard url.isFileURL else { return }
-        browser?.revealDocument(at: url, importIfNeeded: !context.options.openInPlace) { [weak self] revealed, error in
-            if let error { self?.browser?.presentError(error); return }
-            if let revealed { self?.browser?.openDocument(at: revealed) }
-        }
+        guard context.url.isFileURL, let start else { return }
+        DispatchQueue.main.async { start.openFile(context.url) }
     }
 }
