@@ -47,6 +47,9 @@ final class HanXSceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
         self.browser = browser
         if let context = connectionOptions.urlContexts.first { open(context) }
+        #if DEBUG
+        DemoDocuments.openIfRequested(from: browser)
+        #endif
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
