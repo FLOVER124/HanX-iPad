@@ -191,9 +191,9 @@ final class SlideShowViewController: UIViewController {
         view.backgroundColor = .black
         stage.clipsToBounds = true
         view.addSubview(stage)
-        let tap = UITapGestureRecognizer(target: self, action: #selector(next))
-        let back = UISwipeGestureRecognizer(target: self, action: #selector(previous)); back.direction = .right
-        let forward = UISwipeGestureRecognizer(target: self, action: #selector(next)); forward.direction = .left
+        let tap = UITapGestureRecognizer(target: self, action: #selector(advance))
+        let back = UISwipeGestureRecognizer(target: self, action: #selector(goBack)); back.direction = .right
+        let forward = UISwipeGestureRecognizer(target: self, action: #selector(advance)); forward.direction = .left
         let close = UISwipeGestureRecognizer(target: self, action: #selector(closeShow)); close.direction = .down
         for g in [tap, back, forward, close] as [UIGestureRecognizer] { view.addGestureRecognizer(g) }
         hint.text = "탭 또는 → 다음 · 오른쪽으로 쓸기 이전 · 아래로 쓸기 종료"
@@ -291,7 +291,7 @@ final class SlideShowViewController: UIViewController {
     private func scheduleAdvance() {
         advanceTimer?.invalidate()
         guard pres.slides.indices.contains(index), let after = pres.slides[index].transition.advanceAfter, step >= steps.count else { return }
-        advanceTimer = Timer.scheduledTimer(withTimeInterval: max(0.1, after), repeats: false) { [weak self] _ in self?.next() }
+        advanceTimer = Timer.scheduledTimer(withTimeInterval: max(0.1, after), repeats: false) { [weak self] _ in self?.advance() }
     }
 
     /// Groups animations into click steps; within a step, "after previous" chains.
@@ -427,13 +427,13 @@ final class SlideShowViewController: UIViewController {
         }
     }
 
-    @objc private func next() {
+    @objc private func advance() {
         guard !busy else { return }
         if step < steps.count { playStep(); return }
         if index + 1 < pres.slides.count { show(index + 1, transition: true) } else { closeShow() }
     }
 
-    @objc private func previous() {
+    @objc private func goBack() {
         guard !busy else { return }
         if index > 0 { show(index - 1, transition: false) }
     }
@@ -447,8 +447,8 @@ final class SlideShowViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard let key = presses.first?.key else { super.pressesBegan(presses, with: event); return }
         switch key.keyCode {
-        case .keyboardRightArrow, .keyboardDownArrow, .keyboardSpacebar, .keyboardReturnOrEnter, .keyboardPageDown: next()
-        case .keyboardLeftArrow, .keyboardUpArrow, .keyboardPageUp, .keyboardDeleteOrBackspace: previous()
+        case .keyboardRightArrow, .keyboardDownArrow, .keyboardSpacebar, .keyboardReturnOrEnter, .keyboardPageDown: advance()
+        case .keyboardLeftArrow, .keyboardUpArrow, .keyboardPageUp, .keyboardDeleteOrBackspace: goBack()
         case .keyboardEscape: closeShow()
         case .keyboardHome: show(0, transition: false)
         case .keyboardEnd: show(pres.slides.count - 1, transition: false)
