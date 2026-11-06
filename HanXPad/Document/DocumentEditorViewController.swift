@@ -152,7 +152,7 @@ final class DocumentEditorViewController: HanXEditorViewController, UITextViewDe
         let sel = tv.selectedRange
         // After typing pushes the caret onto the next page, follow it there.
         if sel.length == 0, let target = pages.textView(forCharacterAt: sel.location), target !== tv,
-           doc.storage.length > 0, !tv.hasMarkedText {
+           doc.storage.length > 0, tv.markedTextRange == nil {
             let attrs = tv.typingAttributes
             current = target
             target.becomeFirstResponder()

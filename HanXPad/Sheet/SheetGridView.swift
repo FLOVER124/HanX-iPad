@@ -906,7 +906,7 @@ final class CellEditorField: UITextField, UITextFieldDelegate {
         showEditing()
         if inputView != nil { inputView = nil; reloadInputViews() }
         if !isFirstResponder { becomeFirstResponder() }
-        if let end = endOfDocumentPosition as UITextPosition? { selectedTextRange = textRange(from: end, to: end) }
+        selectedTextRange = textRange(from: endOfDocument, to: endOfDocument)
     }
 
     private func showEditing() {
