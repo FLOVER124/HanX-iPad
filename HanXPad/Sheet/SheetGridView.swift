@@ -273,14 +273,14 @@ final class SheetGridView: UIView, UIScrollViewDelegate, UIGestureRecognizerDele
 
     // MARK: Editing
 
-    var isEditing: Bool { editor.state != .ready }
+    var isEditing: Bool { editor.editState != .ready }
 
     func positionEditor() {
         let ref = sheet.merge(containing: cursor)?.start ?? cursor
         let target = sheet.merge(containing: ref) ?? CellRange(ref, ref)
         let r = displayRect(of: target)
         var frame = CGRect(x: r.minX * zoom, y: r.minY * zoom, width: r.width * zoom, height: r.height * zoom)
-        if editor.state != .ready {
+        if editor.editState != .ready {
             let natural = editor.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: frame.height)).width + 12
             frame.size.width = max(frame.width, min(natural, bounds.width - frame.minX))
         }
@@ -303,7 +303,7 @@ final class SheetGridView: UIView, UIScrollViewDelegate, UIGestureRecognizerDele
     }
 
     func commitEdit() {
-        guard editor.state != .ready else { return }
+        guard editor.editState != .ready else { return }
         let ref = sheet.merge(containing: cursor)?.start ?? cursor
         let text = editor.text ?? ""
         editor.reset()
@@ -317,7 +317,7 @@ final class SheetGridView: UIView, UIScrollViewDelegate, UIGestureRecognizerDele
         delegate?.gridSelectionChanged()
     }
 
-    var editingRef: CellRef? { editor.state == .ready ? nil : (sheet.merge(containing: cursor)?.start ?? cursor) }
+    var editingRef: CellRef? { editor.editState == .ready ? nil : (sheet.merge(containing: cursor)?.start ?? cursor) }
 
     func focus() { if !editor.isFirstResponder { editor.becomeFirstResponder() } }
 
@@ -867,7 +867,7 @@ private final class SheetCanvas: UIView {
 final class CellEditorField: UITextField, UITextFieldDelegate {
     enum State { case ready, typing, editing }
     weak var grid: SheetGridView?
-    private(set) var state: State = .ready
+    private(set) var editState: State = .ready
     private let emptyInput = UIView(frame: .zero)
 
     override init(frame: CGRect) {
@@ -887,7 +887,7 @@ final class CellEditorField: UITextField, UITextFieldDelegate {
     private var hardwareKeyboard: Bool { GCKeyboard.coalesced != nil }
 
     func reset() {
-        state = .ready
+        editState = .ready
         text = ""
         backgroundColor = .clear
         textColor = .clear
@@ -901,7 +901,7 @@ final class CellEditorField: UITextField, UITextFieldDelegate {
     }
 
     func begin(_ initial: String, typed: Bool) {
-        state = typed ? .typing : .editing
+        editState = typed ? .typing : .editing
         text = initial
         showEditing()
         if inputView != nil { inputView = nil; reloadInputViews() }
@@ -919,8 +919,8 @@ final class CellEditorField: UITextField, UITextFieldDelegate {
     }
 
     @objc private func changed() {
-        if state == .ready, (text?.isEmpty == false || markedTextRange != nil) {
-            state = .typing
+        if editState == .ready, (text?.isEmpty == false || markedTextRange != nil) {
+            editState = .typing
             showEditing()
         }
         grid?.positionEditor()
@@ -930,7 +930,7 @@ final class CellEditorField: UITextField, UITextFieldDelegate {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard let key = presses.first?.key, let grid else { super.pressesBegan(presses, with: event); return }
         if markedTextRange != nil { super.pressesBegan(presses, with: event); return }
-        switch state {
+        switch editState {
         case .ready:
             if grid.handleKey(key) { return }
         case .typing:
@@ -955,24 +955,24 @@ final class CellEditorField: UITextField, UITextFieldDelegate {
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         guard let grid else { return true }
-        if state == .ready { grid.move(rows: 1, cols: 0, extend: false); return false }
+        if editState == .ready { grid.move(rows: 1, cols: 0, extend: false); return false }
         grid.commitEdit()
         grid.move(rows: 1, cols: 0, extend: false)
         return false
     }
 
     // In the ready state clipboard commands act on the selected cells.
-    override func copy(_ sender: Any?) { if state == .ready { grid?.delegate?.gridCopy(cut: false) } else { super.copy(sender) } }
-    override func cut(_ sender: Any?) { if state == .ready { grid?.delegate?.gridCopy(cut: true) } else { super.cut(sender) } }
-    override func paste(_ sender: Any?) { if state == .ready { grid?.delegate?.gridPaste() } else { super.paste(sender) } }
+    override func copy(_ sender: Any?) { if editState == .ready { grid?.delegate?.gridCopy(cut: false) } else { super.copy(sender) } }
+    override func cut(_ sender: Any?) { if editState == .ready { grid?.delegate?.gridCopy(cut: true) } else { super.cut(sender) } }
+    override func paste(_ sender: Any?) { if editState == .ready { grid?.delegate?.gridPaste() } else { super.paste(sender) } }
     override func selectAll(_ sender: Any?) {
-        if state == .ready, let grid {
+        if editState == .ready, let grid {
             let end = CellRef(row: max(0, grid.sheet.usedRange?.end.row ?? 0), col: max(0, grid.sheet.usedRange?.end.col ?? 0))
             grid.selectRange(CellRange(CellRef(row: 0, col: 0), end))
         } else { super.selectAll(sender) }
     }
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        if state == .ready, [#selector(copy(_:)), #selector(cut(_:)), #selector(paste(_:)), #selector(selectAll(_:))].contains(action) { return true }
+        if editState == .ready, [#selector(copy(_:)), #selector(cut(_:)), #selector(paste(_:)), #selector(selectAll(_:))].contains(action) { return true }
         return super.canPerformAction(action, withSender: sender)
     }
 }
