@@ -38,6 +38,7 @@ final class DocumentEditorViewController: HanXEditorViewController, UITextViewDe
         scroll.backgroundColor = HanXTheme.canvas
         scroll.keyboardDismissMode = .interactive
         scroll.alwaysBounceVertical = true
+        scroll.contentInsetAdjustmentBehavior = .never
         scroll.addSubview(pages)
 
         let stack = UIStackView(arrangedSubviews: [findBar, ruler, scroll])
@@ -67,6 +68,8 @@ final class DocumentEditorViewController: HanXEditorViewController, UITextViewDe
             let fit = min(1.4, (scroll.bounds.width - 16) / pages.bounds.width)
             scroll.zoomScale = max(scroll.minimumZoomScale, fit)
             scrollViewDidEndZooming(scroll, with: pages, atScale: scroll.zoomScale)
+            pagesChanged()
+            scroll.contentOffset = CGPoint(x: -scroll.contentInset.left, y: 0)
         }
         centerPages()
     }

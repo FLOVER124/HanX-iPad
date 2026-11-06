@@ -12,7 +12,38 @@ enum DemoDocuments {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             guard let file = sample(kind) else { return }
             host.openGeneratedDocument(data: file.0, name: "데모 \(kind)", ext: file.1)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { exportReport(kind, host: host) }
         }
+    }
+
+    /// Exports the open document to every format and writes Documents/export-<kind>.txt.
+    static func exportReport(_ kind: String, host: UIViewController) {
+        guard let nav = host.topmostPresenter as? UINavigationController,
+              let editor = nav.viewControllers.first as? HanXEditorViewController else {
+            try? "no editor".write(to: GeneratedFiles.folder.appendingPathComponent("export-\(kind).txt"), atomically: true, encoding: .utf8)
+            return
+        }
+        var lines: [String] = []
+        for f in editor.baseDocument.exportFormats {
+            do {
+                let data = try editor.baseDocument.exportData(for: f.ext)
+                var verdict = "ok"
+                // Re-read what we wrote with the same readers the app uses.
+                switch f.ext {
+                case "docx", "hwpx", "hwp", "hanx" where kind == "document" || kind == "pdf":
+                    let doc = try TextDocument.read(data, ext: f.ext)
+                    verdict = "reread \(doc.stats.paragraphs)p \(doc.stats.tables)t"
+                case "xlsx": verdict = "reread \(try XLSXReader.read(ZipReader(data: data)).sheets.count) sheets"
+                case "pptx": verdict = "reread \(try PPTXReader(zip: ZipReader(data: data)).read().slides.count) slides"
+                case "pdf": verdict = PDFReader.isPDF(data) ? "pdf" : "NOT PDF"
+                default: break
+                }
+                lines.append("\(f.ext)\t\(data.count) bytes\t\(verdict)")
+            } catch {
+                lines.append("\(f.ext)\tFAILED\t\(HanXError.describe(error))")
+            }
+        }
+        try? lines.joined(separator: "\n").write(to: GeneratedFiles.folder.appendingPathComponent("export-\(kind).txt"), atomically: true, encoding: .utf8)
     }
 
     static func sampleDocument() -> UDocument {
