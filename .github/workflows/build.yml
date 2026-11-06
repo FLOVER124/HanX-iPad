@@ -23,7 +23,7 @@ jobs:
           grep -E "error:" build.log | sort -u | head -400 || true
           tail -5 build.log
           grep -q "BUILD SUCCEEDED" build.log
-      - name: Launch each editor in the iPad Simulator
+      - name: Launch each editor in the iPad and iPhone Simulators
         run: |
           UDID=$(xcrun simctl list devices available | grep -E "iPad (Pro|Air)" | head -1 | grep -oE "[0-9A-F-]{36}")
           echo "Simulator $UDID"
@@ -46,5 +46,22 @@ jobs:
           DATA=$(xcrun simctl get_app_container "$UDID" com.hanword.editor.ipad data)
           for kind in document spreadsheet presentation pdf; do echo "== export $kind"; cat "$DATA/Documents/export-$kind.txt" || echo missing; echo; done
           if grep -q "FAILED\|NOT PDF\|no editor" "$DATA"/Documents/export-*.txt; then status=1; fi
+          # iPhone: same app, compact layout.
+          PHONE=$(xcrun simctl list devices available | grep -E "iPhone 1[5-9]( Pro)? \(" | head -1 | grep -oE "[0-9A-F-]{36}")
+          echo "iPhone simulator $PHONE"
+          xcrun simctl boot "$PHONE"
+          xcrun simctl bootstatus "$PHONE" -b > /dev/null
+          xcrun simctl install "$PHONE" dd/Build/Products/Debug-iphonesimulator/HanX.app
+          for kind in start document spreadsheet presentation pdf; do
+            xcrun simctl launch "$PHONE" com.hanword.editor.ipad -HanXDemo $kind
+            sleep 14
+            if ! xcrun simctl spawn "$PHONE" launchctl list | grep -q com.hanword.editor.ipad; then
+              echo "CRASH: iphone-$kind"; status=1
+            fi
+            xcrun simctl io "$PHONE" screenshot "phone-$kind.png" > /dev/null 2>&1 || true
+            sips -Z 520 -s format jpeg -s formatOptions 30 "phone-$kind.png" --out "phone-$kind.jpg" > /dev/null
+            echo "BEGIN-SHOT phone-$kind"; base64 -i "phone-$kind.jpg" | tr -d '\n'; echo; echo "END-SHOT phone-$kind"
+            xcrun simctl terminate "$PHONE" com.hanword.editor.ipad || true
+          done
           for f in ~/Library/Logs/DiagnosticReports/HanX*; do [ -f "$f" ] && { echo "== $f"; head -80 "$f"; }; done
           exit $status

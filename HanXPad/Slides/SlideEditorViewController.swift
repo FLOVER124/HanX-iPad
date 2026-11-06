@@ -35,6 +35,8 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     var pres: Presentation { doc.pres }
+    /// The slide list is narrower on iPhone.
+    private var navigatorWidth: CGFloat { UIDevice.current.userInterfaceIdiom == .phone ? 104 : 190 }
     var slide: Slide { pres.slides.indices.contains(current) ? pres.slides[current] : Slide() }
 
     // SlideCanvasDelegate
@@ -86,8 +88,8 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
             row.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             row.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             row.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            navigator.widthAnchor.constraint(equalToConstant: 190),
-            notes.heightAnchor.constraint(equalToConstant: 92),
+            navigator.widthAnchor.constraint(equalToConstant: navigatorWidth),
+            notes.heightAnchor.constraint(equalToConstant: UIDevice.current.userInterfaceIdiom == .phone ? 64 : 92),
             notesLabel.heightAnchor.constraint(equalToConstant: 20),
         ])
         let center = NotificationCenter.default
@@ -1052,7 +1054,8 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int { pres.slides.count }
 
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        CGSize(width: 150, height: 150 * pres.height / pres.width + 18)
+        let w = navigatorWidth - 40
+        return CGSize(width: w, height: w * CGFloat(pres.height / pres.width) + 18)
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {

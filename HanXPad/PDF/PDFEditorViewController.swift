@@ -30,6 +30,7 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
     private var sidebarItem: UIBarButtonItem!
     private let footer = UIStackView()
     private var hideTimer: Timer?
+    private var modeItem: UIBarButtonItem?
     private var inlineEditor: UITextView?
     private var editingObject: PDFPageObject?
     private var matches: [(page: Int, rect: CGRect)] = []
@@ -61,6 +62,14 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
             self.setSidebar(!self.sidebarVisible, animated: true)
             self.scheduleHide()
         })
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let titles = ["읽기", "필기", "개체 편집"]
+            let symbols = ["book", "pencil.tip", "cursorarrow.rays"]
+            modeItem = UIBarButtonItem(title: "모드", image: UIImage(systemName: symbols[0]), menu: UIMenu(children: titles.indices.map { i in
+                UIAction(title: titles[i], image: UIImage(systemName: symbols[i])) { [weak self] _ in self?.setMode(Mode(rawValue: i) ?? .read) }
+            }))
+            return [modeItem!, sidebarItem]
+        }
         return [UIBarButtonItem(customView: modes), sidebarItem]
     }
 
@@ -304,6 +313,7 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         }
         mode = m
         modes.selectedSegmentIndex = m.rawValue
+        modeItem?.image = UIImage(systemName: ["book", "pencil.tip", "cursorarrow.rays"][m.rawValue])
         reader.isHidden = m == .edit
         scroll.isHidden = m != .edit
         footer.isHidden = m != .edit
@@ -316,7 +326,7 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         }
         if m == .ink { beginInk() }
         // Panels: open while editing objects, folded for reading and writing.
-        setSidebar(m == .edit, animated: false)
+        setSidebar(m == .edit && traitCollection.horizontalSizeClass != .compact, animated: false)
         setRibbonVisible(m == .edit, fullScreen: m == .read)
         hideTimer?.invalidate()
         if m == .read { setBarsHidden(false, animated: false); scheduleHide() } else { setBarsHidden(false, animated: true) }

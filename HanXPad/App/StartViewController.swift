@@ -81,6 +81,7 @@ final class StartViewController: UIViewController {
     }
 
     private func buildMain() {
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
         let title = UILabel()
         title.text = "새로 만들기"
         title.font = .systemFont(ofSize: 27, weight: .semibold)
@@ -92,7 +93,7 @@ final class StartViewController: UIViewController {
             TemplateTile(kind: .spreadsheet, title: "새 도표", caption: "XLSX, CSV") { [weak self] in self?.create(.spreadsheet, ext: "xlsx", name: "새 도표") },
         ])
         tiles.axis = .horizontal
-        tiles.spacing = 24
+        tiles.spacing = phone ? 12 : 24
         tiles.distribution = .fillEqually
 
         let openBox = OpenFileBox { [weak self] in self?.openBrowser() }
@@ -134,8 +135,8 @@ final class StartViewController: UIViewController {
             scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             main.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 56),
             main.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -40),
-            main.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor, constant: 44),
-            main.trailingAnchor.constraint(lessThanOrEqualTo: scroll.frameLayoutGuide.trailingAnchor, constant: -40),
+            main.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor, constant: phone ? 20 : 44),
+            main.trailingAnchor.constraint(lessThanOrEqualTo: scroll.frameLayoutGuide.trailingAnchor, constant: phone ? -20 : -40),
             width,
         ])
     }

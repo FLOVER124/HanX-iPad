@@ -46,7 +46,13 @@ class HanXEditorViewController: UIViewController, UIDocumentPickerDelegate {
         redoItem = UIBarButtonItem(title: "다시 실행", image: UIImage(systemName: "arrow.uturn.forward"), primaryAction: UIAction { [weak self] _ in self?.performUndo(redo: true) })
         saveItem = UIBarButtonItem(title: "저장", image: UIImage(systemName: "square.and.arrow.down"), primaryAction: UIAction { [weak self] _ in self?.saveDocument(nil) })
         exportItem = UIBarButtonItem(title: "내보내기", image: UIImage(systemName: "square.and.arrow.up"), menu: exportMenu())
-        navigationItem.rightBarButtonItems = [exportItem, saveItem, redoItem, undoItem] + extraBarItems()
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            // Narrow bar: undo/redo sit in the centre group, which folds into "…" when space runs out.
+            navigationItem.rightBarButtonItems = [exportItem, saveItem] + extraBarItems()
+            navigationItem.centerItemGroups = [UIBarButtonItemGroup(barButtonItems: [undoItem, redoItem], representativeItem: nil)]
+        } else {
+            navigationItem.rightBarButtonItems = [exportItem, saveItem, redoItem, undoItem] + extraBarItems()
+        }
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         contentView.backgroundColor = HanXTheme.canvas
