@@ -72,7 +72,7 @@ final class RibbonView: UIView {
         NSLayoutConstraint.activate([
             tabBar.topAnchor.constraint(equalTo: topAnchor, constant: 4),
             tabBar.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 12),
-            tabBar.trailingAnchor.constraint(lessThanOrEqualTo: safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            tabBar.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -12),
             tabBar.heightAnchor.constraint(equalToConstant: 31),
             scroll.topAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: 2),
             scroll.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
@@ -308,20 +308,35 @@ final class RibbonPopup: UIButton {
 /// semibold text and a 2 pt accent underline.
 final class RibbonTabBar: UIView {
     var titles: [String] = [] { didSet { rebuild() } }
-    var selected = 0 { didSet { buttons.enumerated().forEach { $0.element.isSelected = $0.offset == selected } } }
+    var selected = 0 {
+        didSet {
+            buttons.enumerated().forEach { $0.element.isSelected = $0.offset == selected }
+            if buttons.indices.contains(selected) { scroll.scrollRectToVisible(buttons[selected].frame.insetBy(dx: -24, dy: 0), animated: true) }
+        }
+    }
     var onSelect: ((Int) -> Void)?
     private var buttons: [TabButton] = []
     private let stack = UIStackView()
+    /// Narrow windows (iPhone, Split View) scroll the tabs sideways.
+    private let scroll = UIScrollView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(scroll)
         stack.axis = .horizontal
         stack.spacing = 0
         stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        scroll.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor), stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor), stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: topAnchor), scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor), scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
     }
     required init?(coder: NSCoder) { fatalError() }

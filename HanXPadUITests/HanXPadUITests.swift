@@ -101,12 +101,15 @@ final class HanXPadUITests: XCTestCase {
 
     func testPDFModes() {
         launch(["-HanXDemo", "pdf"])
-        // 읽기: the bars are hidden; a tap brings them back.
-        sleep(6)
+        XCTAssertTrue(button("닫기").waitForExistence(timeout: 15), "PDF가 열리지 않음")
+        // 읽기: the bars hide after 3 s; a tap on the page brings them back.
+        sleep(5)
+        XCTAssertFalse(button("닫기").exists && button("닫기").isHittable, "읽기 모드에서 상단바가 숨지 않음")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        // iPad shows a segmented control; iPhone a 모드 menu. The bars hide again after 3 s.
+        XCTAssertTrue(button("닫기").waitForExistence(timeout: 3) && button("닫기").isHittable, "탭해도 상단바가 나타나지 않음")
+        // iPad shows a segmented control; iPhone a 모드 menu.
         let menu = app.buttons["모드"].firstMatch
-        if menu.waitForExistence(timeout: 1.5) { menu.tap() }
+        if menu.exists { menu.tap() }
         tap(app.buttons["필기"].firstMatch, "필기 모드")
         sleep(1)
         shot("pdf-ink")
