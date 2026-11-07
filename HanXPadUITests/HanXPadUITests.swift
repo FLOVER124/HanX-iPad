@@ -15,8 +15,8 @@ final class HanXPadUITests: XCTestCase {
         app.launch()
     }
 
-    private func tap(_ element: XCUIElement, _ what: String, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(element.waitForExistence(timeout: 10), "\(what) 없음", file: file, line: line)
+    private func tap(_ element: XCUIElement, _ what: String, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(element.waitForExistence(timeout: timeout), "\(what) 없음", file: file, line: line)
         element.tap()
     }
 
@@ -41,7 +41,8 @@ final class HanXPadUITests: XCTestCase {
         launch()
         XCTAssertTrue(app.staticTexts["새로 만들기"].waitForExistence(timeout: 10))
         tap(button("파일 열기"), "파일 열기 상자")
-        tap(app.buttons["닫기"].firstMatch, "파일 브라우저 닫기")
+        // The system document browser can take a while to come up on a cold simulator.
+        tap(app.buttons["닫기"].firstMatch, "파일 브라우저 닫기", timeout: 40)
         XCTAssertTrue(app.staticTexts["새로 만들기"].waitForExistence(timeout: 10))
     }
 
