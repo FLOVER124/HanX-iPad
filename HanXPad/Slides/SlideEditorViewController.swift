@@ -26,8 +26,15 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
     init(document: SlideFileDocument) {
         doc = document
         let layout = UICollectionViewFlowLayout()
-        layout.minimumLineSpacing = 14
-        layout.sectionInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            // iPhone: a filmstrip under the slide, so the canvas gets the full width.
+            layout.scrollDirection = .horizontal
+            layout.minimumLineSpacing = 10
+            layout.sectionInset = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
+        } else {
+            layout.minimumLineSpacing = 14
+            layout.sectionInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        }
         navigator = UICollectionView(frame: .zero, collectionViewLayout: layout)
         super.init(baseDocument: document)
     }
@@ -35,8 +42,10 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     var pres: Presentation { doc.pres }
-    /// The slide list is narrower on iPhone.
-    private var navigatorWidth: CGFloat { UIDevice.current.userInterfaceIdiom == .phone ? 104 : 190 }
+    private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
+    /// Side list width on iPad; filmstrip height on iPhone.
+    private var navigatorWidth: CGFloat { 190 }
+    private let filmstripHeight: CGFloat = 86
     var slide: Slide { pres.slides.indices.contains(current) ? pres.slides[current] : Slide() }
 
     // SlideCanvasDelegate
@@ -78,9 +87,9 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
         notesLabel.textColor = HanXTheme.secondary
         notesLabel.backgroundColor = HanXTheme.toolbar
 
-        let right = UIStackView(arrangedSubviews: [scroll, notesLabel, notes])
+        let right = UIStackView(arrangedSubviews: isPhone ? [scroll, navigator, notesLabel, notes] : [scroll, notesLabel, notes])
         right.axis = .vertical
-        let row = UIStackView(arrangedSubviews: [navigator, right])
+        let row = UIStackView(arrangedSubviews: isPhone ? [right] : [navigator, right])
         row.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(row)
         NSLayoutConstraint.activate([
@@ -88,8 +97,9 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
             row.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             row.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             row.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            navigator.widthAnchor.constraint(equalToConstant: navigatorWidth),
-            notes.heightAnchor.constraint(equalToConstant: UIDevice.current.userInterfaceIdiom == .phone ? 64 : 92),
+            isPhone ? navigator.heightAnchor.constraint(equalToConstant: filmstripHeight)
+                    : navigator.widthAnchor.constraint(equalToConstant: navigatorWidth),
+            notes.heightAnchor.constraint(equalToConstant: isPhone ? 64 : 92),
             notesLabel.heightAnchor.constraint(equalToConstant: 20),
         ])
         let center = NotificationCenter.default
@@ -152,7 +162,7 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
         canvas.selectedIDs = []
         canvas.setNeedsDisplay()
         notes.text = slide.notes
-        navigator.selectItem(at: IndexPath(item: index, section: 0), animated: true, scrollPosition: .centeredVertically)
+        navigator.selectItem(at: IndexPath(item: index, section: 0), animated: true, scrollPosition: isPhone ? .centeredHorizontally : .centeredVertically)
         ribbon?.refresh()
     }
 
@@ -1054,6 +1064,10 @@ final class SlideEditorViewController: HanXEditorViewController, SlideCanvasDele
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int { pres.slides.count }
 
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        if isPhone {
+            let h = filmstripHeight - 12 - 18
+            return CGSize(width: h * CGFloat(pres.width / pres.height), height: h + 18)
+        }
         let w = navigatorWidth - 40
         return CGSize(width: w, height: w * CGFloat(pres.height / pres.width) + 18)
     }
