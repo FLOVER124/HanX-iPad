@@ -120,7 +120,7 @@ final class HanXPadUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText("Added")
         tap(app.alerts.buttons["확인"], "확인")
-        tap(button("페이지 패널"), "페이지 패널")
+        if button("페이지 패널").exists { button("페이지 패널").tap() }   // iPhone: inside "…"
         shot("pdf-edit")
         closeEditor()
     }
