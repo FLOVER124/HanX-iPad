@@ -7,8 +7,8 @@ class HanXEditorViewController: UIViewController, UIDocumentPickerDelegate {
     let baseDocument: HanXBaseDocument
     let contentView = UIView()
     private(set) var ribbon: RibbonView?
-    private var undoItem: UIBarButtonItem!
-    private var redoItem: UIBarButtonItem!
+    private(set) var undoItem: UIBarButtonItem!
+    private(set) var redoItem: UIBarButtonItem!
     private(set) var saveItem: UIBarButtonItem!
     private(set) var exportItem: UIBarButtonItem!
     private var observers: [NSObjectProtocol] = []

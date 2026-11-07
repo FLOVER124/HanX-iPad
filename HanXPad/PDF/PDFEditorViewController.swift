@@ -76,6 +76,11 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
     override func viewDidLoad() {
         super.viewDidLoad()
         buildRibbon()
+        if let modeItem, UIDevice.current.userInterfaceIdiom == .phone {
+            // iPhone: keep the mode switch visible; the rest folds into "…" when space runs out.
+            navigationItem.rightBarButtonItems = [exportItem, modeItem]
+            navigationItem.centerItemGroups = [UIBarButtonItemGroup(barButtonItems: [undoItem, redoItem, saveItem, sidebarItem], representativeItem: nil)]
+        }
 
         sidebar.backgroundColor = HanXTheme.toolbar
         sidebar.dataSource = self
