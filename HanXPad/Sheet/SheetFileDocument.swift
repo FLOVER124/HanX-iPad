@@ -14,7 +14,7 @@ final class SheetFileDocument: HanXBaseDocument {
     override init(fileURL url: URL) {
         let blank = Workbook()
         book = blank
-        engine = FormulaEngine(book: blank)
+        engine = FormulaEngine(book: blank, allowExternalIO: false)
         super.init(fileURL: url)
     }
 
@@ -35,7 +35,7 @@ final class SheetFileDocument: HanXBaseDocument {
             }
             if loaded.sheets.isEmpty { loaded.sheets = [Worksheet(name: "Sheet1")] }
             book = loaded
-            engine = FormulaEngine(book: loaded)
+            engine = FormulaEngine(book: loaded, allowExternalIO: false)
             currentSheetIndex = 0
         } catch {
             recordLoadError(error)
@@ -48,12 +48,12 @@ final class SheetFileDocument: HanXBaseDocument {
     override func exportData(for ext: String) throws -> Data {
         NotificationCenter.default.post(name: .sheetCommitEditing, object: self)
         switch ext {
-        case "hanx": return HanXFile.encode(.spreadsheet, payload: XLSXWriter.write(book))
+        case "hanx": return HanXFile.encode(.spreadsheet, payload: XLSXWriter.write(book, allowExternalIO: false))
         case "csv": return DelimitedText.write(sheet, engine: engine, separator: ",")
         case "tsv", "tab": return DelimitedText.write(sheet, engine: engine, separator: "\t")
         case "html", "htm": return Data(SheetHTML.html(book, engine: engine).utf8)
         case "pdf": return SheetPDF.pdf(book, engine: engine)
-        default: return XLSXWriter.write(book)
+        default: return XLSXWriter.write(book, allowExternalIO: false)
         }
     }
 

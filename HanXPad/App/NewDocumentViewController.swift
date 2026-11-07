@@ -38,8 +38,8 @@ struct CreationRequest {
             let book = Workbook()
             switch ext {
             case "csv": return Data()
-            case "hanx": return HanXFile.encode(.spreadsheet, payload: XLSXWriter.write(book))
-            default: return XLSXWriter.write(book)
+            case "hanx": return HanXFile.encode(.spreadsheet, payload: XLSXWriter.write(book, allowExternalIO: false))
+            default: return XLSXWriter.write(book, allowExternalIO: false)
             }
         }
     }

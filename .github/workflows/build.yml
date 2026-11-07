@@ -65,3 +65,14 @@ jobs:
           done
           for f in ~/Library/Logs/DiagnosticReports/HanX*; do [ -f "$f" ] && { echo "== $f"; head -80 "$f"; }; done
           exit $status
+      - name: UI tests (real taps) on iPad and iPhone
+        run: |
+          status=0
+          for pattern in "iPad (Pro|Air)" "iPhone 1[5-9]( Pro)? \\("; do
+            DEV=$(xcrun simctl list devices available | grep -E "$pattern" | head -1 | grep -oE "[0-9A-F-]{36}")
+            echo "== UI tests on $(xcrun simctl list devices | grep $DEV | head -1)"
+            xcodebuild test -project HanXPad.xcodeproj -scheme HanXPad -destination "id=$DEV" \
+              -derivedDataPath dd ARCHS=arm64 CODE_SIGNING_ALLOWED=NO > test.log 2>&1 || status=1
+            grep -E "Test Case .*(passed|failed)|error:|XCTAssert|Failing tests|\*\* TEST" test.log | sort -u | head -80
+          done
+          exit $status
