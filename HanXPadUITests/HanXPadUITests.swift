@@ -104,11 +104,9 @@ final class HanXPadUITests: XCTestCase {
         // 읽기: the bars are hidden; a tap brings them back.
         sleep(6)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        let ink = app.buttons["필기"].firstMatch
-        if !ink.waitForExistence(timeout: 5) {
-            // iPhone: modes live in a menu.
-            tap(app.buttons["모드"].firstMatch, "모드 메뉴")
-        }
+        // iPad shows a segmented control; iPhone a 모드 menu. The bars hide again after 3 s.
+        let menu = app.buttons["모드"].firstMatch
+        if menu.waitForExistence(timeout: 1.5) { menu.tap() }
         tap(app.buttons["필기"].firstMatch, "필기 모드")
         sleep(1)
         shot("pdf-ink")
