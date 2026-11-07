@@ -350,7 +350,7 @@ final class OpenFileBox: UIControl {
         title.font = .systemFont(ofSize: 16, weight: .semibold)
         title.textColor = HanXTheme.ink
         let caption = UILabel()
-        caption.text = "파일 앱의 iPad, iCloud Drive 등에서 문서를 찾아 엽니다"
+        caption.text = "파일 앱의 \(UIDevice.current.model), iCloud Drive 등에서 문서를 찾아 엽니다"
         caption.font = .systemFont(ofSize: 12)
         caption.textColor = HanXTheme.secondary
         let text = UIStackView(arrangedSubviews: [title, caption])
