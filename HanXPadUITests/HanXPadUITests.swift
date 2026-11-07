@@ -107,10 +107,17 @@ final class HanXPadUITests: XCTestCase {
         XCTAssertFalse(button("닫기").exists && button("닫기").isHittable, "읽기 모드에서 상단바가 숨지 않음")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(button("닫기").waitForExistence(timeout: 3) && button("닫기").isHittable, "탭해도 상단바가 나타나지 않음")
-        // iPad shows a segmented control; iPhone a 모드 menu.
-        let menu = app.buttons["모드"].firstMatch
-        if menu.exists { menu.tap() }
-        tap(app.buttons["필기"].firstMatch, "필기 모드")
+        // iPad shows a segmented control; iPhone a 모드 menu. The bars may hide
+        // again while the test runner is slow, so tap the page to bring them back.
+        var switched = false
+        for _ in 0..<4 where !switched {
+            let menu = app.buttons["모드"].firstMatch
+            if menu.exists && menu.isHittable { menu.tap() }
+            let ink = app.buttons["필기"].firstMatch
+            if ink.waitForExistence(timeout: 1) && ink.isHittable { ink.tap(); switched = true }
+            else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap(); sleep(1) }
+        }
+        XCTAssertTrue(switched, "필기 모드로 바꾸지 못함")
         sleep(1)
         shot("pdf-ink")
         if !app.buttons["개체 편집"].firstMatch.exists { tap(app.buttons["모드"].firstMatch, "모드 메뉴") }
