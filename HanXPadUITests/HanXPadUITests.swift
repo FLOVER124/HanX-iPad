@@ -100,10 +100,10 @@ final class HanXPadUITests: XCTestCase {
     }
 
     func testPDFModes() {
-        launch(["-HanXDemo", "pdf"])
+        launch(["-HanXDemo", "pdf", "-HanXSlowAutoHide"])
         XCTAssertTrue(button("닫기").waitForExistence(timeout: 15), "PDF가 열리지 않음")
-        // 읽기: the bars hide after 3 s; a tap on the page brings them back.
-        sleep(5)
+        // 읽기: the bars hide by themselves (10 s in this test build); a tap brings them back.
+        sleep(13)
         XCTAssertFalse(button("닫기").exists && button("닫기").isHittable, "읽기 모드에서 상단바가 숨지 않음")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(button("닫기").waitForExistence(timeout: 3) && button("닫기").isHittable, "탭해도 상단바가 나타나지 않음")

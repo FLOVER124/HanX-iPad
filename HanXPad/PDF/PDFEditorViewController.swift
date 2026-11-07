@@ -158,6 +158,13 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         tap.cancelsTouchesInView = false
         reader.addGestureRecognizer(tap)
         ink.onChange = { [weak self] in self?.updateChrome() }
+        if let bar = navigationController?.navigationBar {
+            let touch = UILongPressGestureRecognizer(target: self, action: #selector(barTouched(_:)))
+            touch.minimumPressDuration = 0
+            touch.cancelsTouchesInView = false
+            touch.delegate = self
+            bar.addGestureRecognizer(touch)
+        }
 
         observer = NotificationCenter.default.addObserver(forName: .pdfDocumentChanged, object: doc, queue: .main) { [weak self] _ in self?.documentChanged() }
     }
@@ -355,11 +362,25 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         if !barsHidden { scheduleHide() }
     }
 
+    private var hideDelay: TimeInterval {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-HanXSlowAutoHide") { return 10 }
+        #endif
+        return 3
+    }
+
+    /// Any touch on the bar restarts the countdown, so it never vanishes under a finger.
+    @objc private func barTouched(_ g: UIGestureRecognizer) {
+        guard mode == .read else { return }
+        if g.state == .began || g.state == .ended { hideTimer?.invalidate() }
+        if g.state == .ended || g.state == .cancelled { scheduleHide() }
+    }
+
     /// In 읽기 the bars fade out 3 seconds after they appear (unless a menu or panel is in use).
     private func scheduleHide() {
         hideTimer?.invalidate()
         guard mode == .read else { return }
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
+        hideTimer = Timer.scheduledTimer(withTimeInterval: hideDelay, repeats: false) { [weak self] _ in
             guard let self, self.mode == .read, self.presentedViewController == nil, !self.sidebarVisible, self.findBar.isHidden else { return }
             self.setBarsHidden(true, animated: true)
         }
