@@ -15,6 +15,7 @@ final class StartViewController: UIViewController {
         view.backgroundColor = HanXTheme.paper
         buildSidebar()
         buildMain()
+        view.addInteraction(UIDropInteraction(delegate: self))
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -154,14 +155,55 @@ final class StartViewController: UIViewController {
             return
         }
         for url in urls {
-            recentList.addArrangedSubview(RecentRow(url: url, open: { [weak self] in self?.openFile(url) }, remove: { [weak self] in
+            let remove = { [weak self] in
                 RecentDocuments.remove(url)
                 self?.rebuildRecent()
-            }))
+            }
+            let row = RecentRow(url: url, open: { [weak self] in self?.openFile(url) }, remove: remove)
+            row.menu = { [weak self, weak row] in
+                var items: [UIMenuElement] = [
+                    UIAction(title: "열기", image: UIImage(systemName: "doc")) { _ in self?.openFile(url) },
+                ]
+                if UIApplication.shared.supportsMultipleScenes {
+                    items.append(UIAction(title: "새 윈도우에서 열기", image: UIImage(systemName: "macwindow.badge.plus")) { _ in
+                        HanXSceneDelegate.openInNewWindow(url)
+                    })
+                }
+                items.append(UIAction(title: "공유…", image: UIImage(systemName: "square.and.arrow.up")) { _ in
+                    guard let self, let row else { return }
+                    self.share(url, from: row)
+                })
+                items.append(UIAction(title: "최근 문서에서 제거", image: UIImage(systemName: "xmark.circle"), attributes: .destructive) { _ in remove() })
+                return UIMenu(children: items)
+            }
+            recentList.addArrangedSubview(row)
         }
     }
 
     // MARK: Actions
+
+    private var sharedScope: URL?
+
+    private func share(_ url: URL, from source: UIView) {
+        if url.startAccessingSecurityScopedResource() { sharedScope = url }
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = source
+        sheet.popoverPresentationController?.sourceRect = source.bounds
+        sheet.completionWithItemsHandler = { [weak self] _, _, _, _ in
+            self?.sharedScope?.stopAccessingSecurityScopedResource()
+            self?.sharedScope = nil
+        }
+        present(sheet, animated: true)
+    }
+
+    // Hardware keyboard: ⌘N new document, ⌘O open (only while the start screen is in front).
+    @objc func newDocumentCommand(_ sender: Any?) { create(.blankDocument, ext: "hwpx", name: "새 문서") }
+    @objc func openCommand(_ sender: Any?) { openBrowser() }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(newDocumentCommand(_:)) || action == #selector(openCommand(_:)) { return presentedViewController == nil }
+        return super.canPerformAction(action, withSender: sender)
+    }
 
     private func create(_ template: CreationRequest.Template, ext: String, name: String) {
         let request = CreationRequest(template: template, ext: ext, name: name)
@@ -380,8 +422,17 @@ final class OpenFileBox: UIControl {
 }
 
 /// Recent document row: kind icon, name, "EXT ,  folder ,  date", remove button.
-final class RecentRow: UIControl {
+final class RecentRow: UIControl, UIContextMenuInteractionDelegate {
     private let openAction: () -> Void
+    /// Long-press / right-click menu.
+    var menu: (() -> UIMenu)? {
+        didSet { if menu != nil, interactions.allSatisfy({ !($0 is UIContextMenuInteraction) }) { addInteraction(UIContextMenuInteraction(delegate: self)) } }
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        guard let menu else { return nil }
+        return UIContextMenuConfiguration(actionProvider: { _ in menu() })
+    }
     override var isHighlighted: Bool { didSet { backgroundColor = isHighlighted ? HanXTheme.selection : .clear } }
 
     init(url: URL, open: @escaping () -> Void, remove: @escaping () -> Void) {
@@ -435,9 +486,55 @@ final class RecentRow: UIControl {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
+        isAccessibilityElement = true
         accessibilityLabel = url.lastPathComponent
+        accessibilityValue = detail.text
+        accessibilityTraits = .button
+        accessibilityCustomActions = [UIAccessibilityCustomAction(name: "최근 문서에서 제거") { _ in remove(); return true }]
         addAction(UIAction { [weak self] _ in self?.openAction() }, for: .touchUpInside)
         addInteraction(UIPointerInteraction(delegate: nil))
     }
     required init?(coder: NSCoder) { fatalError() }
+}
+
+// MARK: - Drag & drop a file onto the start screen to open it
+
+extension StartViewController: UIDropInteractionDelegate {
+    private var dropTypes: [String] { FileKinds.readable.map(\.identifier) }
+
+    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
+        presentedViewController == nil && session.hasItemsConforming(toTypeIdentifiers: dropTypes)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: UIDropSession) -> UIDropProposal {
+        UIDropProposal(operation: .copy)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: UIDropSession) {
+        guard let provider = session.items.first?.itemProvider,
+              let type = provider.registeredTypeIdentifiers.first(where: { id in
+                  FileKinds.readable.contains { UTType(id)?.conforms(to: $0) == true }
+              }) else { return }
+        let suggested = provider.suggestedName
+        provider.loadInPlaceFileRepresentation(forTypeIdentifier: type) { [weak self] url, inPlace, error in
+            guard let url else {
+                DispatchQueue.main.async { self?.presentMessage("파일을 열 수 없습니다", error?.localizedDescription ?? "") }
+                return
+            }
+            if inPlace {
+                DispatchQueue.main.async { self?.openFile(url) }
+                return
+            }
+            // A copy that only lives for this callback: keep it in On My iPad › HanX.
+            let ext = url.pathExtension.isEmpty ? (UTType(type)?.preferredFilenameExtension ?? "") : url.pathExtension
+            let name = suggested ?? url.deletingPathExtension().lastPathComponent
+            let result = Result { try GeneratedFiles.write(Data(contentsOf: url), name: name, ext: ext) }
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let saved): self?.openFile(saved)
+                case .failure(let e): self?.presentError(e)
+                }
+            }
+        }
+    }
 }

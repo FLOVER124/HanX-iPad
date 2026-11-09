@@ -46,6 +46,23 @@ final class HanXPadUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["새로 만들기"].waitForExistence(timeout: 10))
     }
 
+    func testRecentDocumentMenu() {
+        launch()
+        tap(button("새 도표"), "새 도표 타일")
+        XCTAssertTrue(button("닫기").waitForExistence(timeout: 15), "새 도표가 열리지 않음")
+        closeEditor()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '새 도표' AND label CONTAINS '.xlsx'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "최근 문서에 새 도표가 없음")
+        row.press(forDuration: 1.5)
+        let remove = app.buttons["최근 문서에서 제거"].firstMatch
+        XCTAssertTrue(remove.waitForExistence(timeout: 5), "최근 문서 메뉴가 뜨지 않음")
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            XCTAssertTrue(app.buttons["새 윈도우에서 열기"].exists, "새 윈도우에서 열기 항목 없음")
+        }
+        shot("recent-menu")
+        remove.tap()
+    }
+
     func testDocumentEditing() {
         launch()
         tap(button("새 문서"), "새 문서 타일")

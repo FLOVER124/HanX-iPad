@@ -26,6 +26,11 @@ final class HanXAppDelegate: UIResponder, UIApplicationDelegate {
             UIKeyCommand(title: "닫기", action: #selector(HanXEditorViewController.closeDocument(_:)), input: "w", modifierFlags: [.command, .alternate]),
         ])
         builder.insertChild(file, atStartOfMenu: .file)
+        let start = UIMenu(title: "", options: .displayInline, children: [
+            UIKeyCommand(title: "새 문서", action: #selector(StartViewController.newDocumentCommand(_:)), input: "n", modifierFlags: .command),
+            UIKeyCommand(title: "열기…", action: #selector(StartViewController.openCommand(_:)), input: "o", modifierFlags: .command),
+        ])
+        builder.insertChild(start, atStartOfMenu: .file)
         let find = UIMenu(title: "", options: .displayInline, children: [
             UIKeyCommand(title: "찾기", action: #selector(HanXEditorViewController.showFind(_:)), input: "f", modifierFlags: .command),
         ])
@@ -47,6 +52,10 @@ final class HanXSceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
         self.start = start
         if let context = connectionOptions.urlContexts.first { open(context) }
+        else if let activity = connectionOptions.userActivities.first ?? session.stateRestorationActivity,
+                let url = HanXSceneDelegate.url(from: activity) {
+            DispatchQueue.main.async { start.openFile(url) }
+        }
         #if DEBUG
         DemoDocuments.openIfRequested(from: start)
         #endif
@@ -54,6 +63,39 @@ final class HanXSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         if let context = URLContexts.first { open(context) }
+    }
+
+    // MARK: Windows and state restoration
+
+    static let openActivityType = "com.hanword.editor.ipad.open-document"
+
+    static func activity(for url: URL) -> NSUserActivity? {
+        guard let bookmark = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) else { return nil }
+        let activity = NSUserActivity(activityType: openActivityType)
+        activity.title = url.lastPathComponent
+        activity.addUserInfoEntries(from: ["bookmark": bookmark])
+        return activity
+    }
+
+    static func url(from activity: NSUserActivity) -> URL? {
+        guard activity.activityType == openActivityType, let data = activity.userInfo?["bookmark"] as? Data else { return nil }
+        var stale = false
+        return try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
+    }
+
+    /// iPad: opens the document in a separate window (side by side, Stage Manager).
+    static func openInNewWindow(_ url: URL) {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        guard let activity = activity(for: url) else { return }
+        UIApplication.shared.requestSceneSessionActivation(nil, userActivity: activity, options: nil)
+    }
+
+    /// Reopens the document that was in front when the system closed the app.
+    func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
+        guard let editor = (window?.rootViewController?.presentedViewController as? UINavigationController)?.viewControllers.first as? HanXEditorViewController
+        else { return nil }
+        return HanXSceneDelegate.activity(for: editor.baseDocument.fileURL)
     }
 
     /// Files opened from the Files app (in place) or shared into HanX.

@@ -27,7 +27,11 @@ enum EditorFactory {
             }
             let nav = UINavigationController(rootViewController: editor)
             nav.modalPresentationStyle = .fullScreen
-            host.topmostPresenter.present(nav, animated: true) { editor.didFinishPresenting() }
+            host.topmostPresenter.present(nav, animated: true) {
+                editor.didFinishPresenting()
+                // Name the window after the document (window switcher, Stage Manager).
+                editor.view.window?.windowScene?.title = url.deletingPathExtension().lastPathComponent
+            }
         }
     }
 }

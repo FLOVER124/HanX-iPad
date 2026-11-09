@@ -13,6 +13,8 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
 
     let doc: PDFFileDocument
     private var mode: Mode = .read
+    /// Reading position to restore once the document reloads after 필기.
+    private var pendingSpot: ReadingSpot?
     private var pageIndex = 0
     private let modes = UISegmentedControl(items: ["읽기", "필기", "개체 편집"])
     private let sidebar: UICollectionView
@@ -157,6 +159,14 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         tap.delegate = self
         tap.cancelsTouchesInView = false
         reader.addGestureRecognizer(tap)
+        // Apple Pencil on the page while reading switches straight to 필기 (like Goodnotes).
+        let pencil = UILongPressGestureRecognizer(target: self, action: #selector(pencilTouched(_:)))
+        pencil.minimumPressDuration = 0
+        pencil.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        pencil.cancelsTouchesInView = false
+        pencil.delegate = self
+        reader.addGestureRecognizer(pencil)
+        pencilGesture = pencil
         ink.onChange = { [weak self] in self?.updateChrome() }
         if let bar = navigationController?.navigationBar {
             let touch = UILongPressGestureRecognizer(target: self, action: #selector(barTouched(_:)))
@@ -318,6 +328,9 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
     // MARK: Modes
 
     private func setMode(_ m: Mode) {
+        // Keep the exact reading position when moving between 읽기 and 필기.
+        let spot = mode != .edit ? readingSpot() : nil
+        if let spot { pageIndex = spot.index }
         commitTextEdit()
         if inkActive { finishInk() }
         if mode != .edit, m == .edit, let current = reader.currentPage, reader.document === doc.pdf, let i = doc.pdf?.index(for: current) {
@@ -334,9 +347,10 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
             showPage()
         } else {
             if reader.document !== doc.pdf { reader.document = doc.pdf }
-            if let page = doc.pdf?.page(at: pageIndex) { reader.go(to: page) }
+            if let spot, m != .ink { restore(spot) }
+            else if spot == nil, let page = doc.pdf?.page(at: pageIndex) { reader.go(to: page) }
         }
-        if m == .ink { beginInk() }
+        if m == .ink { beginInk(at: spot) }
         // Panels: open while editing objects, folded for reading and writing.
         setSidebar(m == .edit && traitCollection.horizontalSizeClass != .compact, animated: false)
         setRibbonVisible(m == .edit, fullScreen: m == .read)
@@ -353,6 +367,13 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         UIView.animate(withDuration: animated ? 0.25 : 0, animations: { self.view.layoutIfNeeded() }, completion: { _ in
             if !self.sidebarVisible { self.sidebar.isHidden = true }
         })
+    }
+
+    private weak var pencilGesture: UIGestureRecognizer?
+
+    @objc private func pencilTouched(_ g: UIGestureRecognizer) {
+        guard g.state == .began, mode == .read, doc.pdf != nil else { return }
+        setMode(.ink)
     }
 
     @objc private func readerTapped(_ g: UITapGestureRecognizer) {
@@ -394,9 +415,11 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         if thumbnailRevision != doc.revision { thumbnailCache = [:]; thumbnailRevision = doc.revision }
         sidebar.reloadData()
         if mode != .edit, !inkActive, reader.document !== doc.pdf {
-            let current = reader.currentPage.flatMap { reader.document?.index(for: $0) } ?? pageIndex
+            let spot = pendingSpot ?? readingSpot()
+            pendingSpot = nil
             reader.document = doc.pdf
-            if let p = doc.pdf?.page(at: min(current, max(0, count - 1))) { reader.go(to: p) }
+            if let spot { restore(spot) }
+            else if let p = doc.pdf?.page(at: min(pageIndex, max(0, count - 1))) { reader.go(to: p) }
         }
         if mode == .edit { showPage(keepSelection: true) }
         updateChrome()
@@ -727,25 +750,44 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
 
     // MARK: 필기 (PencilKit)
 
-    private func beginInk() {
+    private func beginInk(at spot: ReadingSpot? = nil) {
         guard !inkActive, let pdf = doc.pdf else { return }
+        let spot = spot ?? readingSpot()
         inkActive = true
         ink.begin(on: reader, document: pdf)
-        if let page = pdf.page(at: pageIndex) { reader.go(to: page) }
+        if let spot { restore(spot) } else if let page = pdf.page(at: pageIndex) { reader.go(to: page) }
+    }
+
+    /// Where the reader is looking: page, point in page space and zoom.
+    struct ReadingSpot { var index: Int; var point: CGPoint; var scale: CGFloat }
+
+    private func readingSpot() -> ReadingSpot? {
+        guard let dest = reader.currentDestination, let page = dest.page, let i = reader.document?.index(for: page) else { return nil }
+        return ReadingSpot(index: i, point: dest.point, scale: reader.scaleFactor)
+    }
+
+    private func restore(_ spot: ReadingSpot) {
+        guard let pdf = reader.document, let page = pdf.page(at: min(spot.index, max(0, pdf.pageCount - 1))) else { return }
+        reader.layoutDocumentView()
+        if !reader.autoScales { reader.scaleFactor = spot.scale }
+        reader.go(to: PDFDestination(page: page, at: spot.point))
     }
 
     /// Writes the handwriting into the PDF (vector ink annotations) as one undoable step.
     private func finishInk() {
         guard inkActive, let pdf = doc.pdf else { inkActive = false; return }
         inkActive = false
-        let current = reader.currentPage.flatMap { pdf.index(for: $0) } ?? pageIndex
+        let spot = readingSpot()
+        let current = spot?.index ?? pageIndex
         let changed = ink.end(document: pdf)
         pageIndex = current
+        pendingSpot = spot
         guard changed, let data = pdf.dataRepresentation() else {
             // Drop the page overlays (the provider is gone) and show the restored annotations.
             reader.document = nil
             reader.document = pdf
-            if let page = pdf.page(at: current) { reader.go(to: page) }
+            if let spot { restore(spot) } else if let page = pdf.page(at: current) { reader.go(to: page) }
+            pendingSpot = nil
             return
         }
         doc.setData(data, actionName: "필기")

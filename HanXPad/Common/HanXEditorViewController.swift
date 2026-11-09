@@ -316,7 +316,9 @@ class HanXEditorViewController: UIViewController, UIDocumentPickerDelegate {
 
     func finishClose() {
         willCloseDocument()
+        let scene = view.window?.windowScene
         baseDocument.close { [weak self] _ in
+            scene?.title = nil
             self?.dismiss(animated: true)
         }
     }

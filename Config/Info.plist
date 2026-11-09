@@ -201,6 +201,10 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.hanword.editor.ipad.open-document</string>
+	</array>
 	<key>UIRequiresFullScreen</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations</key>
