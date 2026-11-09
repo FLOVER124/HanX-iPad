@@ -356,8 +356,12 @@ final class PDFEditorViewController: HanXEditorViewController, UIGestureRecogniz
         setRibbonVisible(m == .edit, fullScreen: m == .read)
         hideTimer?.invalidate()
         if m == .read { setBarsHidden(false, animated: false); scheduleHide() } else { setBarsHidden(false, animated: true) }
+        // Reading takes the hardware keyboard (arrows / space turn pages).
+        if m == .read, findBar.isHidden { becomeFirstResponder() }
         ribbon?.refresh()
     }
+
+    override var canBecomeFirstResponder: Bool { true }
 
     private func setSidebar(_ visible: Bool, animated: Bool) {
         sidebarVisible = visible
@@ -1002,6 +1006,48 @@ final class OCRResultViewController: UIViewController {
 
 extension CGRect {
     var center: CGPoint { CGPoint(x: midX, y: midY) }
+}
+
+// MARK: - Hardware keyboard
+
+extension PDFEditorViewController {
+    override var keyCommands: [UIKeyCommand]? {
+        var list = [
+            UIKeyCommand(title: "읽기", action: #selector(keyModeRead), input: "1", modifierFlags: .command),
+            UIKeyCommand(title: "필기", action: #selector(keyModeInk), input: "2", modifierFlags: .command),
+            UIKeyCommand(title: "개체 편집", action: #selector(keyModeEdit), input: "3", modifierFlags: .command),
+        ]
+        guard mode != .edit else { return list }
+        list += [
+            UIKeyCommand(title: "확대", action: #selector(keyZoomIn), input: "=", modifierFlags: .command),
+            UIKeyCommand(title: "축소", action: #selector(keyZoomOut), input: "-", modifierFlags: .command),
+            UIKeyCommand(title: "실제 크기에 맞춤", action: #selector(keyZoomFit), input: "0", modifierFlags: .command),
+            UIKeyCommand(title: "다음 쪽", action: #selector(keyNextPage), input: UIKeyCommand.inputPageDown, modifierFlags: []),
+            UIKeyCommand(title: "이전 쪽", action: #selector(keyPreviousPage), input: UIKeyCommand.inputPageUp, modifierFlags: []),
+        ]
+        // Arrows and space turn pages while reading (not while a text field has the keyboard).
+        if mode == .read {
+            for (input, action) in [(UIKeyCommand.inputRightArrow, #selector(keyNextPage)), (UIKeyCommand.inputLeftArrow, #selector(keyPreviousPage)),
+                                    (" ", #selector(keyNextPage))] {
+                let c = UIKeyCommand(input: input, modifierFlags: [], action: action)
+                c.wantsPriorityOverSystemBehavior = true
+                list.append(c)
+            }
+            let back = UIKeyCommand(input: " ", modifierFlags: .shift, action: #selector(keyPreviousPage))
+            back.wantsPriorityOverSystemBehavior = true
+            list.append(back)
+        }
+        return list
+    }
+
+    @objc private func keyModeRead() { if mode != .read { setMode(.read) } }
+    @objc private func keyModeInk() { if mode != .ink { setMode(.ink) } }
+    @objc private func keyModeEdit() { if mode != .edit { setMode(.edit) } }
+    @objc private func keyZoomIn() { reader.zoomIn(nil) }
+    @objc private func keyZoomOut() { reader.zoomOut(nil) }
+    @objc private func keyZoomFit() { reader.autoScales = true }
+    @objc private func keyNextPage() { reader.goToNextPage(nil) }
+    @objc private func keyPreviousPage() { reader.goToPreviousPage(nil) }
 }
 
 extension PDFEditorViewController {
