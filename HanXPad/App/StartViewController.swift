@@ -422,14 +422,14 @@ final class OpenFileBox: UIControl {
 }
 
 /// Recent document row: kind icon, name, "EXT ,  folder ,  date", remove button.
-final class RecentRow: UIControl, UIContextMenuInteractionDelegate {
+final class RecentRow: UIControl {
     private let openAction: () -> Void
-    /// Long-press / right-click menu.
+    /// Long-press / right-click menu (UIControl's built-in context menu).
     var menu: (() -> UIMenu)? {
-        didSet { if menu != nil, interactions.allSatisfy({ !($0 is UIContextMenuInteraction) }) { addInteraction(UIContextMenuInteraction(delegate: self)) } }
+        didSet { isContextMenuInteractionEnabled = menu != nil }
     }
 
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+    override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
         guard let menu else { return nil }
         return UIContextMenuConfiguration(actionProvider: { _ in menu() })
     }
